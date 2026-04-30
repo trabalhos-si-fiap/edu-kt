@@ -30,12 +30,14 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.offset
@@ -53,19 +55,29 @@ import br.com.edu.core.ui.AuthBottomBar
 import br.com.edu.core.ui.EduCard
 import br.com.edu.core.ui.EduPrimaryButton
 import br.com.edu.core.ui.EduTextField
-import kotlinx.coroutines.launch
 
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateRegister: () -> Unit,
     onNavigateLogistics: () -> Unit,
+    viewModel: LoginViewModel = viewModel(),
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     val snackbarHost = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    val uiState by viewModel.state.collectAsState()
+
+    LaunchedEffect(uiState.success) {
+        if (uiState.success) onLoginSuccess()
+    }
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHost.showSnackbar(it)
+            viewModel.consumedError()
+        }
+    }
 
     Box(
         Modifier
@@ -165,16 +177,8 @@ fun LoginScreen(
                     )
                     Spacer(Modifier.height(24.dp))
                     EduPrimaryButton(
-                        text = "Entrar",
-                        onClick = {
-                            if (email == "teste" && password == "teste") {
-                                onLoginSuccess()
-                            } else {
-                                scope.launch {
-                                    snackbarHost.showSnackbar("Credenciais inválidas. Use teste / teste")
-                                }
-                            }
-                        },
+                        text = if (uiState.loading) "Entrando..." else "Entrar",
+                        onClick = { viewModel.submit(email, password) },
                     )
                     Spacer(Modifier.height(20.dp))
 

@@ -31,12 +31,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -63,7 +66,9 @@ import java.util.TimeZone
 @Composable
 fun RegisterScreen(
     onNavigateLogin: () -> Unit,
+    viewModel: RegisterViewModel = viewModel(),
 ) {
+    val uiState by viewModel.state.collectAsState()
     var name by rememberSaveable { mutableStateOf("") }
     var email by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
@@ -78,6 +83,20 @@ fun RegisterScreen(
     val scope = rememberCoroutineScope()
 
     val specialRegex = Regex("[!@#\$%^&*(),.?\":{}|<>]")
+
+    LaunchedEffect(uiState.success) {
+        if (uiState.success) {
+            snackbarHost.showSnackbar("Cadastro realizado!")
+            viewModel.consumed()
+            onNavigateLogin()
+        }
+    }
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHost.showSnackbar(it)
+            viewModel.consumed()
+        }
+    }
 
     Box(
         Modifier
@@ -210,7 +229,7 @@ fun RegisterScreen(
                     }
                     Spacer(Modifier.height(24.dp))
                     EduPrimaryButton(
-                        text = "Cadastrar",
+                        text = if (uiState.loading) "Enviando..." else "Cadastrar",
                         onClick = {
                             val error = when {
                                 name.isBlank() -> "Informe o nome"
@@ -222,8 +241,16 @@ fun RegisterScreen(
                                 confirm != password -> "Senhas não coincidem"
                                 else -> null
                             }
-                            scope.launch {
-                                snackbarHost.showSnackbar(error ?: "Cadastro realizado!")
+                            if (error != null) {
+                                scope.launch { snackbarHost.showSnackbar(error) }
+                            } else {
+                                viewModel.submit(
+                                    email = email,
+                                    password = password,
+                                    name = name,
+                                    phone = phone,
+                                    birthDate = birthDate,
+                                )
                             }
                         },
                     )
