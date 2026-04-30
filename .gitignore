@@ -1,0 +1,26 @@
+# Build outputs
+build/
+.gradle/
+.kotlin/
+
+# Local config
+local.properties
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend (commit separately)
+back-end/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
