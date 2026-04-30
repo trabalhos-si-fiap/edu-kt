@@ -14,13 +14,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.DashboardCustomize
-import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ShoppingCart
@@ -34,10 +37,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,6 +56,7 @@ import br.com.edu.core.ui.EduPurpleButton
 import br.com.edu.core.ui.EduSoftButton
 import br.com.edu.core.ui.EduTextField
 import br.com.edu.core.ui.MainBottomBar
+import br.com.edu.features.cart.presentation.CartViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,8 +64,12 @@ fun MarketplaceScreen(
     onOpenCart: () -> Unit,
     onOpenOrders: () -> Unit,
     onBack: () -> Unit = {},
+    viewModel: MarketplaceViewModel = viewModel(),
+    cartViewModel: CartViewModel = CartViewModel.get(),
 ) {
     var search by remember { mutableStateOf("") }
+    val uiState by viewModel.state.collectAsState()
+    val cartBusy by cartViewModel.busy.collectAsState()
 
     Scaffold(
         containerColor = EduColors.White,
@@ -122,26 +132,59 @@ fun MarketplaceScreen(
                 }
             }
             item { FeaturedCard(onExplore = {}) }
-            item {
-                ProductCard(
-                    category = "APOSTILA DIGITAL",
-                    title = "Guia de Redação Nota 1000",
-                    description = "Estruturas prontas e repertório sociocultural para o ENEM.",
-                    price = "R\$ 49,90",
-                    icon = Icons.Outlined.MenuBook,
-                )
-            }
-            item {
-                ProductCard(
-                    category = null,
-                    title = "2024 Exam Prep Guide",
-                    description = "Physical Book • Hardcover",
-                    price = "R\$ 49,90",
-                    icon = Icons.Outlined.AutoStories,
-                )
+
+            when (val state = uiState) {
+                is MarketplaceUiState.Loading -> item {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EduColors.Primary)
+                    }
+                }
+                is MarketplaceUiState.Error -> item {
+                    Column(
+                        Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            "Não foi possível carregar os produtos.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = EduColors.TextPrimary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            state.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = EduColors.TextSecondary,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = { viewModel.load() }) {
+                            Text("Tentar novamente", color = EduColors.Primary)
+                        }
+                    }
+                }
+                is MarketplaceUiState.Ready -> items(state.products) { product ->
+                    ProductCard(
+                        category = product.subtype.uppercase().ifBlank { product.type.uppercase() },
+                        title = product.name,
+                        description = product.description,
+                        price = formatPrice(product.price),
+                        icon = iconFor(product.type),
+                        addEnabled = !cartBusy,
+                        onAddToCart = { cartViewModel.addItem(product.id) },
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatPrice(raw: String): String {
+    val value = raw.toDoubleOrNull() ?: return "R$ $raw"
+    return "R$ %,.2f".format(value).replace(',', 'X').replace('.', ',').replace('X', '.')
+}
+
+private fun iconFor(type: String): ImageVector = when (type.lowercase()) {
+    "apostila", "apostila_digital", "digital" -> Icons.AutoMirrored.Outlined.MenuBook
+    else -> Icons.Outlined.AutoStories
 }
 
 @Composable
@@ -201,6 +244,8 @@ private fun ProductCard(
     description: String,
     price: String,
     icon: ImageVector,
+    addEnabled: Boolean,
+    onAddToCart: () -> Unit,
 ) {
     EduCard(
         modifier = Modifier.fillMaxWidth(),
@@ -240,7 +285,10 @@ private fun ProductCard(
             Spacer(Modifier.height(14.dp))
             Text(price, style = MaterialTheme.typography.titleLarge, color = EduColors.TextPrimary)
             Spacer(Modifier.height(16.dp))
-            EduSoftButton(text = "+ Carrinho", onClick = {})
+            EduSoftButton(
+                text = "+ Carrinho",
+                onClick = { if (addEnabled) onAddToCart() },
+            )
         }
     }
 }

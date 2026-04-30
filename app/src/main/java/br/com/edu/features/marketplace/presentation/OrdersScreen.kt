@@ -22,7 +22,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LocalShipping
-import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -246,9 +246,9 @@ private fun DeliveredOrderCard(id: String, date: String, itemsCount: Int, total:
             }
             Spacer(Modifier.height(16.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ItemThumb(Icons.Outlined.MenuBook, EduColors.Purple)
+                ItemThumb(Icons.AutoMirrored.Outlined.MenuBook, EduColors.Purple)
                 Spacer(Modifier.width(8.dp))
-                ItemThumb(Icons.Outlined.MenuBook, EduColors.GreenDark)
+                ItemThumb(Icons.AutoMirrored.Outlined.MenuBook, EduColors.GreenDark)
                 Spacer(Modifier.width(8.dp))
                 Box(
                     Modifier
