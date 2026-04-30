@@ -15,12 +15,11 @@ local.properties
 .DS_Store
 Thumbs.db
 
-# Backend (commit separately)
-back-end/
-
 # Python
 __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
 .ruff_cache/
+back-end/data/
+back-end/*.sqlite3
