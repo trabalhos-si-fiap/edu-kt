@@ -68,6 +68,8 @@ edu-kt/
 |---|---|---|
 | JDK | 17 ou 21 (LTS) | Temurin via `asdf install java temurin-21.0.9+10.0.LTS` |
 | Android SDK | Platform 35 + Build-Tools 34 | Android Studio ou `cmdline-tools` |
+| Docker + Compose | qualquer versão recente | docker.com / pacote da distro |
+| Python | 3.10+ (só para o `configure_ip.py`) | já vem na maioria das distros |
 | Gradle | não precisa instalar — o wrapper baixa 8.10.2 | — |
 
 Variáveis de ambiente esperadas:
@@ -78,25 +80,54 @@ export ANDROID_HOME=$HOME/Android/Sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
 ```
 
-`local.properties` (na raiz) deve conter:
+## Quick start (clonou agora?)
 
-```properties
-sdk.dir=/home/SEU_USUARIO/Android/Sdk
+```bash
+make doctor   # confere JDK, Docker, porta 8000, AVD e IP atual
+make dev      # setup + IP + sobe backend + emulador + instala/abre o app
 ```
+
+`make dev` faz, em ordem:
+1. `make setup` → grava `local.properties` apontando para o Android SDK.
+2. `make configure-ip` → detecta o IP da LAN e escreve em `BASE_URL` (`app/build.gradle.kts`)
+   **e** no `network_security_config.xml` — sem isso o app falha em silêncio com
+   "CLEARTEXT communication not permitted".
+3. `make backend-up` → `docker compose up -d --wait`: roda migrações, semeia catálogo
+   e admin, sobe o Granian em `:8000` e bloqueia até o healthcheck passar.
+4. `make emulator` → sobe o primeiro AVD se ainda não houver device conectado.
+5. Aguarda o boot do emulador (`sys.boot_completed=1`) e roda `make run`.
+
+**Login seedado:** `admin@admin.local` / `admin` (criado pelo `seed_admin`).
+
+Em caso de erro de detecção de IP (VPN, segunda interface, etc.), force manualmente:
+`make configure-ip IP=192.168.x.x`.
 
 ## Atalhos via Makefile
 
-Para o fluxo de dev mais comum, use o `Makefile` na raiz:
-
 ```bash
-make help        # lista todos os alvos
-make setup       # gera local.properties
-make doctor      # confere JDK, SDK e adb devices
-make emulator    # sobe o primeiro AVD em background (ou AVD=nome make emulator)
-make run         # build + install + launch
-make logs        # logcat filtrado pelo PID do app
-make stop        # force-stop
-make clean       # limpa artefatos
+make help            # lista todos os alvos
+make doctor          # diagnóstico (JDK, Docker, porta, AVD, IP)
+make dev             # fluxo completo: setup + IP + backend + emulador + app
+
+# IP / config
+make configure-ip    # detecta IP e grava em BASE_URL + network_security_config
+make configure-ip IP=192.168.0.10     # força um IP específico
+make show-ip         # mostra o BASE_URL atual
+
+# Backend (docker compose)
+make backend-up      # sobe DB + API com healthcheck (--wait)
+make backend-down    # derruba os containers
+make backend-restart # reinicia só a API (mantém o DB)
+make backend-logs    # logs do container da API
+make backend-shell   # shell dentro do container
+make seed            # reroda seed_catalog + seed_admin
+
+# Frontend (Android)
+make emulator        # sobe AVD em background (AVD=nome para escolher)
+make run             # build + install + launch
+make logs            # logcat filtrado pelo PID do app
+make stop            # force-stop
+make clean           # limpa artefatos
 ```
 
 `make` exporta `JAVA_HOME` (Temurin 21 do asdf) e `ANDROID_HOME` (`~/Android/Sdk`) automaticamente — sobrescreva passando `JAVA_HOME=... make run` se precisar.
@@ -187,6 +218,9 @@ adb uninstall br.com.edu
 - **Build trava em `:app:processDebugMainManifest` ou similar** — rode `./gradlew --stop` e tente novamente; se persistir, `rm -rf ~/.gradle/caches/build-cache-1` e rebuilde.
 - **Fontes Lexend Deca não aparecem** — o `ui-text-google-fonts` baixa a fonte na primeira execução (precisa de internet no emulador/dispositivo). Sem rede, o sistema usa fallback.
 - **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** — desinstale a versão antiga: `adb uninstall br.com.edu`.
+- **App não conecta no backend / `Connection refused` ou `CLEARTEXT not permitted`** — o IP da máquina mudou. Rode `make configure-ip` (ou `make configure-ip IP=192.168.x.x` se a detecção pegar o IP errado — VPN, segunda interface) e rebuilde com `make run`. Confira com `make show-ip`. O script já atualiza o `network_security_config.xml`.
+- **`make backend-up` trava em "waiting for healthy"** — `make backend-logs` para ver o erro. Causas comuns: porta 8000 ocupada (`make doctor` avisa); migration falhou (apaguar `back-end/data/db.sqlite3` e tentar de novo).
+- **Login falha com `Invalid credentials`** — o seed do admin pode não ter rodado. `make seed` reaplica.
 
 ## Identidade visual
 

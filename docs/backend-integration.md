@@ -17,13 +17,44 @@ Estado atual da integração entre o app Android e o backend Django, e as diretr
 ## Configuração de rede
 
 - `BASE_URL` é definido em tempo de build via `buildConfigField` em `app/build.gradle.kts`.
-  Hoje está fixo em `http://10.146.201.54:8000/api/` (IP do PC do dev na LAN doméstica).
-  Trocar por flavor / `local.properties` quando houver mais de um ambiente.
+  Por padrão aponta para o IP da LAN do PC do dev na porta `8000`. Trocar por flavor /
+  `local.properties` quando houver mais de um ambiente.
 - Como é HTTP (não HTTPS), o S23 / Android 9+ bloqueia cleartext por padrão.
   Liberado **apenas para o IP do backend** em `app/src/main/res/xml/network_security_config.xml`,
   referenciado pelo `AndroidManifest.xml` via `android:networkSecurityConfig`.
 - Backend já roda em `0.0.0.0:8000` (`back-end/docker-compose.yml`) com `ALLOWED_HOSTS=["*"]`
   e `CORS_ALLOW_ALL_ORIGINS=True`. Em produção, trocar ambos por valores restritivos.
+
+### Sincronizar IP do backend no app
+
+O IP da LAN muda (Wi-Fi diferente, DHCP, hotspot). Para evitar editar `build.gradle.kts`
+na mão, há um helper Python que detecta o IP atual e reescreve **dois arquivos** ao
+mesmo tempo: o `BASE_URL` em `app/build.gradle.kts` e o `<domain>` em
+`app/src/main/res/xml/network_security_config.xml` — sem este último, o Android bloqueia
+a chamada com "CLEARTEXT communication not permitted".
+
+```bash
+make configure-ip                  # detecta o IP da LAN automaticamente
+make configure-ip IP=192.168.0.10  # força um IP específico (override em caso de erro)
+make configure-ip PORT=8001        # mantém o IP atual e troca a porta
+make show-ip                       # mostra o BASE_URL atual sem alterar
+```
+
+Por baixo dos panos roda `python3 scripts/configure_ip.py`, que abre um socket UDP para
+um endereço público e lê o IP local que o kernel usaria — sem enviar pacote algum. Se a
+detecção pegar o IP errado (VPN, segunda interface, container), use `IP=...` para forçar.
+
+### Fluxo completo (clone → app rodando)
+
+```bash
+make doctor   # confere JDK, Docker, porta 8000, AVD, IP atual
+make dev      # setup + IP + docker compose up --wait + emulador + run
+```
+
+`make dev` orquestra tudo: grava `local.properties`, sincroniza IP, sobe o backend
+via `docker compose up -d --wait` (bloqueia até o healthcheck `/api/products` passar),
+sobe o emulador se necessário e instala/abre o app. Login seedado:
+`admin@admin.local` / `admin`.
 
 ## Camada de rede (`core/network`)
 
