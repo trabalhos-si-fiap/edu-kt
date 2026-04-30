@@ -58,6 +58,8 @@ def serialize_cart(cart: Cart) -> dict:
             {
                 "product_id": it.product_id,
                 "name": it.product.name,
+                "type": it.product.type,
+                "subtype": it.product.subtype,
                 "price": it.product.price,
                 "quantity": it.quantity,
                 "subtotal": subtotal,

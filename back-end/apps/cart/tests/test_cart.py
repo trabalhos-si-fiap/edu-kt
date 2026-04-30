@@ -32,6 +32,8 @@ def test_add_item_to_cart(client, auth_headers, product):
     assert len(body["items"]) == 1
     assert body["items"][0]["product_id"] == product.id
     assert body["items"][0]["quantity"] == 2
+    assert body["items"][0]["type"] == "APOSTILA"
+    assert body["items"][0]["subtype"] == "DIGITAL"
     assert str(body["total"]) == "20.00"
 
 

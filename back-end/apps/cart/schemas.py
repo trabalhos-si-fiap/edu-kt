@@ -11,6 +11,8 @@ class CartItemIn(Schema):
 class CartItemOut(Schema):
     product_id: int
     name: str
+    type: str
+    subtype: str
     price: Decimal
     quantity: int
     subtotal: Decimal
