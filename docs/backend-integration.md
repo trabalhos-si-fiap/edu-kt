@@ -1,63 +1,173 @@
-# Integração com back-end (Spring Boot)
+# Integração com back-end (Django + django-ninja)
 
-Diretrizes para quando o back-end Java/Spring Boot entrar. Este doc define **a fronteira** — o que pertence a cada lado — e padrões de comunicação. Detalhes de endpoints virão num `api.md` separado quando o contrato existir.
+Estado atual da integração entre o app Android e o backend Django, e as diretrizes para evoluí-la. O backend vive em `back-end/` e expõe a API em `/api/` via [django-ninja](https://django-ninja.dev/).
 
-## Fica só no celular
+> Histórico: a primeira versão deste doc previa Spring Boot. O backend real do projeto é Django; manteve-se Retrofit/OkHttp do lado do app.
+
+## O que já está integrado
+
+| Feature | Endpoint | Status |
+|---|---|---|
+| Login | `POST /api/auth/login` | ✅ Tela `LoginScreen` chama o backend, salva token, navega ao Marketplace |
+| Cadastro | `POST /api/auth/register` | ✅ Tela `RegisterScreen` valida localmente e cria conta no backend |
+| Catálogo | `GET /api/products` | ✅ `MarketplaceScreen` lista produtos reais (loading/erro/retry) |
+| Carrinho | `/api/cart/*` | ✅ `CartViewModel` singleton sincroniza add/remove com o backend; `CheckoutScreen` lê do servidor |
+| Pedidos | `/api/orders/*` | ⏳ não conectado |
+
+## Configuração de rede
+
+- `BASE_URL` é definido em tempo de build via `buildConfigField` em `app/build.gradle.kts`.
+  Hoje está fixo em `http://10.146.201.54:8000/api/` (IP do PC do dev na LAN doméstica).
+  Trocar por flavor / `local.properties` quando houver mais de um ambiente.
+- Como é HTTP (não HTTPS), o S23 / Android 9+ bloqueia cleartext por padrão.
+  Liberado **apenas para o IP do backend** em `app/src/main/res/xml/network_security_config.xml`,
+  referenciado pelo `AndroidManifest.xml` via `android:networkSecurityConfig`.
+- Backend já roda em `0.0.0.0:8000` (`back-end/docker-compose.yml`) com `ALLOWED_HOSTS=["*"]`
+  e `CORS_ALLOW_ALL_ORIGINS=True`. Em produção, trocar ambos por valores restritivos.
+
+## Camada de rede (`core/network`)
+
+```
+core/
+├── auth/
+│   └── TokenStore.kt         # singleton em memória (StateFlow<String?>)
+└── network/
+    ├── ApiClient.kt          # Retrofit + OkHttp + kotlinx-serialization
+    └── AuthInterceptor.kt    # injeta "Authorization: Bearer <key>"
+```
+
+- **Retrofit 2.11** + **OkHttp 4.12** + **kotlinx-serialization 1.7** + converter da JakeWharton.
+- `Json { ignoreUnknownKeys = true; coerceInputValues = true }` — tolerante a campos novos
+  no backend sem quebrar o app.
+- `HttpLoggingInterceptor` em `BODY` quando `BuildConfig.DEBUG` (visível via `adb logcat | grep OkHttp`).
+- `AuthInterceptor` lê o token do `TokenStore` e adiciona `Authorization: Bearer <key>`.
+  O backend (`apps/accounts/auth.BearerAuth`) é tolerante a prefixo: aceita `Bearer <key>`,
+  `Token <key>` ou só `<key>` — faz `header.split()[-1]` antes de buscar o token. Útil
+  para curl manual e para não quebrar se um cliente legado mandar outro prefixo.
+
+### Token store
+
+`TokenStore` é um singleton **em memória** — perde o token ao matar o app.
+Próximo passo é migrar para `androidx.datastore:datastore-preferences` (eventualmente
+`EncryptedSharedPreferences` se o produto exigir).
+
+## Padrão por feature
+
+Estrutura espelhada em `features/<feature>/`:
+
+```
+features/auth/
+├── data/
+│   ├── AuthRepository.kt          # orquestra chamadas, mapeia erros, salva token
+│   └── remote/
+│       ├── AuthApi.kt             # interface Retrofit
+│       └── AuthDtos.kt            # @Serializable LoginRequest / TokenResponse / ...
+└── presentation/
+    ├── LoginScreen.kt             # Compose
+    ├── LoginViewModel.kt          # MutableStateFlow<LoginUiState>
+    ├── RegisterScreen.kt
+    └── RegisterViewModel.kt
+```
+
+```
+features/marketplace/
+├── data/
+│   ├── MarketplaceRepository.kt   # DTO → domínio
+│   └── remote/
+│       ├── ProductApi.kt
+│       └── ProductDto.kt
+├── domain/
+│   └── Product.kt
+└── presentation/
+    ├── MarketplaceScreen.kt
+    └── MarketplaceViewModel.kt    # Loading / Ready(products) / Error(message)
+```
+
+Convenções:
+- **DTOs ficam em `data/remote`**, marcados com `@Serializable`. Espelham o JSON cru do backend.
+- **Modelos de domínio em `domain/`**, sem dependência de Retrofit/serialization.
+- **Repositories em `data/`** convertem DTO ↔ domínio e centralizam tratamento de erro.
+- **ViewModels** expõem `StateFlow<UiState>` com hierarquia `sealed` (Loading / Ready / Error)
+  ou `data class` com flags (`loading / error / success`) para fluxos sem dados de retorno.
+- Telas Compose usam `viewModel()` e `collectAsState()`. Eventos efêmeros (snackbar, navegação
+  pós-sucesso) ficam em `LaunchedEffect(state.field)` + função `consumed*()` no VM para limpar.
+
+## Padrão de erro
+
+Hoje:
+- Repository chama `Response<T>` do Retrofit. Em `!isSuccessful`, decodifica `{"detail": "..."}`
+  (formato do django-ninja) em `ErrorResponse` e lança `IllegalStateException(detail)`.
+- ViewModel envolve em `Result.runCatching` e expõe `error: String?`.
+
+Quando a base de erros crescer:
+- Trocar `String?` por `sealed class AppError { Network, Validation, Auth, Server }`.
+- Adicionar **refresh interceptor** para `401` (re-autentica e re-tenta uma vez).
+- Snackbar para erros de operação; banner persistente para "sem rede".
+
+## Mapeamento de campos sensíveis
+
+- `price` vem como **string** do django-ninja (serialização padrão de `Decimal`).
+  O DTO recebe `String`; a tela formata para `R$ 49,90`.
+- `birth_date` no `RegisterRequest` vai como string (formato livre por enquanto). Se virar
+  validação estrita no backend, padronizar `yyyy-MM-dd`.
+
+## O que ainda fica só no celular
 
 | Dado | Por quê |
 |---|---|
-| Estado de UI (scroll, aba, expanded) | Não tem valor de negócio; `rememberSaveable` cobre. |
-| Tokens de sessão (JWT, refresh) | Em `EncryptedSharedPreferences`. Servidor revoga via expiração/blacklist; não rastreia onde está guardado. |
-| FCM push token / device id | Gerados pelo dispositivo. Você *envia* ao servidor para receber push, mas o dono é o cliente. |
-| Preferências de UI (tema, fonte) | Por dispositivo; viram conta-bound só se o produto pedir multi-device coerente. |
-| Rascunhos de formulário | Cadastro pela metade, "Adicionar Método" antes de salvar. Sumir num crash é UX ruim, mas não vale endpoint. |
-| Cache de dados do servidor | Catálogo, histórico. Fonte da verdade é o backend; local só melhora perceived performance e habilita offline. |
-| Histórico de busca / "visto recentemente" | Pessoal e barato; só vai pro servidor se o produto vender "continue de onde parou em outro dispositivo". |
-| Fila de analytics | Eventos bufferizados localmente até a próxima conexão. |
+| Estado de UI (scroll, expanded, aba) | Sem valor de negócio; `rememberSaveable` cobre |
+| FCM push token / device id | Gerado pelo dispositivo, enviado ao servidor para receber push |
+| Preferências (tema, fonte) | Por dispositivo; vira conta-bound só se houver multi-device |
+| Rascunhos de formulário | UX local; não vale endpoint |
+| Cache de catálogo | Backend é fonte da verdade; cache local melhora perceived performance |
+| Histórico de busca | Pessoal e barato |
 
-## Vai obrigatoriamente para o back-end
+## Carrinho
 
-- Catálogo de produtos e estoque.
-- Pedidos e seu ciclo de vida (criação, status, eventos de logística).
-- Métodos de pagamento salvos — guardar o **token do gateway** + últimos 4 dígitos. Cartão cru *nunca* passa pelo seu servidor.
-- Perfil de usuário (nome, e-mail, telefone, data de nascimento).
-- Autenticação — login, registro, recovery, refresh.
+**Servidor é a única fonte de verdade.** Cada ação (`addItem`, `decrementItem`, `removeAll`)
+chama o backend e a resposta `CartOut` substitui o estado em memória do `CartViewModel`.
+Sem cache local persistido — KISS, e evita merge de estados divergentes.
 
-## Borderline: carrinho
+```
+features/cart/
+├── data/
+│   ├── CartRepository.kt
+│   └── remote/
+│       ├── CartApi.kt              # GET /cart, POST /cart/items, DELETE /cart/items/{id}?quantity=
+│       └── CartDto.kt              # CartDto / CartItemDto / CartItemInDto
+├── domain/
+│   └── Cart.kt                     # Cart + CartItem (totalQuantity helper)
+└── presentation/
+    └── CartViewModel.kt            # singleton (CartViewModel.get()), Mutex serializa mutações
+```
 
-Três modelos possíveis. Recomendado: **híbrido**.
+- `CartViewModel.get()` é **singleton manual** (sem DI). Marketplace e Checkout compartilham
+  a mesma instância pelo tempo de vida do processo, então o badge / total ficam consistentes
+  sem passar nada pelo `NavHost`.
+- `Mutex.withLock` em `runOp` serializa `add`/`remove` concorrentes — protege contra spam de
+  toque sem precisar travar a UI por completo.
+- `CheckoutScreen` chama `cartViewModel.load()` em `LaunchedEffect(Unit)` para refrescar ao
+  abrir (cobre o caso de outro device ter alterado o carrinho).
+- Botões da `CartItemCard`: **"Remover 1"** chama `decrementItem` (DELETE com `quantity=1`);
+  **X** no canto chama `removeAll` (DELETE sem `quantity` — apaga o item inteiro).
 
-| Modelo | Prós | Contras |
-|---|---|---|
-| Só local | Simples, offline funciona, não exige login | Some ao reinstalar/trocar de aparelho |
-| Só servidor | Multi-device, histórico de abandono | Requer auth para adicionar item; sem rede = sem carrinho |
-| **Híbrido** (recomendado) | Local é fonte da verdade enquanto logado; sync em background via `WorkManager` | Precisa lógica de merge (last-write-wins por SKU) |
+Trade-off conhecido: sem rede, o carrinho não funciona. Aceitável enquanto o app exigir login
+para qualquer ação útil. Cache local + sync com `WorkManager` é evolução futura se o produto
+exigir uso offline.
 
-## Stack de comunicação
+## Segurança — pendências antes de prod
 
-- **Retrofit + OkHttp + Kotlinx Serialization** — padrão mais comum, baixa fricção com Spring (JSON).
-- **Auth interceptor** anexa o JWT em todas as chamadas autenticadas.
-- **Refresh interceptor** intercepta `401`, faz refresh e re-tenta uma vez (idempotente). Se o refresh falhar, derruba sessão e navega para `login`.
-- **Coroutines + Flow** — `suspend fun` no service, `Flow` quando há mais de uma emissão (status de pedido, push de novidade no carrinho).
-- **DTO ↔ domínio**: nunca expor DTO Retrofit direto à `presentation`. Mapper na `data/`.
+- [ ] HTTPS obrigatório; remover `cleartextTrafficPermitted`.
+- [ ] `ALLOWED_HOSTS` específicos no Django; CORS restrito.
+- [ ] Token persistido em `EncryptedSharedPreferences` ou `DataStore` com criptografia.
+- [ ] Refresh token + interceptor de re-tentativa em `401`.
+- [ ] Não logar tokens, CPF, dados sensíveis — checar `HttpLoggingInterceptor` desligado em release.
+- [ ] Certificate pinning quando o produto justificar.
 
-## Padrões de erro
+## Ordem de implementação restante
 
-- Backend devolve `{ code, message, details? }` em corpo de erro.
-- App mapeia para um `sealed class AppError` com casos cobertos no UI (rede, validação, autenticação, servidor).
-- Snackbar para erros de operação; banner persistente para "sem rede".
-
-## Segurança
-
-- HTTPS obrigatório (cleartext bloqueado no `network-security-config.xml`).
-- Certificate pinning quando o produto justificar.
-- Tokens em `EncryptedSharedPreferences`. Não logar tokens, CPF, números de cartão — nem em `debug`.
-- Toda chamada de mutação (POST/PUT/DELETE) precisa de JWT válido; o servidor é a única autoridade.
-
-## Ordem de implementação sugerida
-
-1. Auth (login + cadastro real, JWT, refresh).
-2. Catálogo (substitui mocks do Marketplace).
-3. Carrinho híbrido.
-4. Checkout + pagamento (gateway tokenizado).
-5. Pedidos com push de status (FCM + endpoint REST).
+1. **Checkout** — fechar pedido (`POST /api/orders`), tratar resposta de pagamento, esvaziar `CartViewModel`.
+2. **Lista de pedidos** — `GET /api/orders`, ligar `OrdersScreen`.
+3. **Persistência do token** — DataStore.
+4. **Refresh / 401 handling**.
+5. **Push (FCM)** — quando houver evento de status de pedido pelo backend.

@@ -43,7 +43,7 @@ Regra: **nunca importar de outra `features/X` em uma `features/Y`**. Se há algo
 - **Nomes**: `PascalCase` para classes/composables, `camelCase` para funções e propriedades, `SCREAMING_SNAKE_CASE` apenas para constantes top-level.
 - **Composables públicos** começam com letra maiúscula (`LoginScreen`); privados com letra minúscula (`labeledField`) só quando convertidos a função normal — para `@Composable` privados, manter PascalCase com modificador `private`.
 - **Tamanho de arquivo**: alvo ~250 linhas. Acima disso, extrair composables auxiliares como `private @Composable fun` no mesmo arquivo ou subir para `core/ui` se virar reutilizável.
-- **Estado**: `remember` para estado efêmero, `rememberSaveable` para o que sobrevive a `process death` (ex.: campos de formulário). Para estado complexo, `ViewModel` (a entrar com o backend).
+- **Estado**: `remember` para estado efêmero, `rememberSaveable` para o que sobrevive a `process death` (ex.: campos de formulário). Para estado de operação (loading/erro/dados do backend), `ViewModel` expondo `StateFlow<UiState>` — padrão já adotado em `LoginViewModel`, `RegisterViewModel`, `MarketplaceViewModel`.
 - **Modifiers**: ordem canônica — `.fillMax* → .padding → .background → .border → .clip → .clickable → .semantics`.
 - **Strings hardcoded**: ok no protótipo. Ao internacionalizar, mover para `res/values/strings.xml`.
 
@@ -52,4 +52,4 @@ Regra: **nunca importar de outra `features/X` em uma `features/Y`**. Se há algo
 - **KISS** — três linhas iguais > abstração prematura.
 - **Composição > herança** — Compose já força isso; não criar wrappers desnecessários.
 - **Source of truth única** — estado mora em um lugar e é passado para baixo via parâmetros; eventos sobem via callbacks (`onClick`, `onValueChange`).
-- **Sem lógica de negócio em `@Composable`** — quando o backend entrar, mover para `ViewModel`/`UseCase`.
+- **Sem lógica de negócio em `@Composable`** — chamadas ao backend ficam em `Repository`, orquestração em `ViewModel`. Telas só observam `StateFlow` e disparam intents.

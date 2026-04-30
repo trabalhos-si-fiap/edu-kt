@@ -8,19 +8,19 @@ Lista funcional de cada Composable de tela. Para layout visual, ver o [Design Sy
 - Card central com email, senha (toggle de visibilidade), link "Esqueceu sua senha?", botão **Entrar**, divisor "Ou entre com" e dois botões sociais (Google / Apple) — apenas visuais.
 - Créditos da equipe e ano abaixo do card.
 - `AuthBottomBar` com abas Entrar / Cadastro.
-- **Mock de login**: aceita apenas `email = "teste"` e `senha = "teste"`. Qualquer outra combinação dispara Snackbar.
-- Estado: `email`, `password`, `passwordVisible` em `rememberSaveable`.
+- **Backend**: `POST /api/auth/login` via `LoginViewModel` → `AuthRepository`. Em sucesso, token é salvo no `TokenStore` e a tela navega para o Marketplace; em erro, mostra o `detail` do servidor em Snackbar.
+- Estado de UI: `email`, `password`, `passwordVisible` em `rememberSaveable`. Estado de operação: `LoginUiState(loading, error, success)` no ViewModel.
 
 ## Cadastro (`features/auth/presentation/RegisterScreen.kt`)
 
 - Header "Crie sua conta!" + 6 campos: Nome, E-mail, Telefone (apenas dígitos), Data de nascimento (`DatePickerDialog`), Senha, Confirmar senha (ambos com toggle de visibilidade).
-- Botão **Cadastrar** valida e mostra Snackbar; ainda não há persistência nem envio.
-- **Validações**:
+- **Validações locais** (antes de bater no backend):
   - Todos os campos obrigatórios.
   - E-mail precisa conter `@`.
   - Senha ≥ 8 caracteres **e** pelo menos 1 caractere especial (`[!@#$%^&*(),.?":{}|<>]`).
   - Confirmação igual à senha.
-- A retomada para o Login é feita pela `AuthBottomBar`.
+- **Backend**: se as validações passarem, `RegisterViewModel.submit(...)` chama `POST /api/auth/register`. Em sucesso, snackbar "Cadastro realizado!" + navegação para Login; em erro (ex.: e-mail duplicado), exibe o `detail` retornado.
+- A retomada manual para o Login é feita pela `AuthBottomBar`.
 
 ## Marketplace (`features/marketplace/presentation/MarketplaceScreen.kt`)
 
@@ -29,7 +29,7 @@ Lista funcional de cada Composable de tela. Para layout visual, ver o [Design Sy
   1. Título **EduMarketplace**.
   2. Search bar (apenas UI, sem filtro real).
   3. **Featured card** (bg `Primary`) com tag "EDUCAÇÃO 5.0" e CTA roxo "Explorar Coleção".
-  4. Dois `ProductCard` (mocks: "Guia de Redação Nota 1000" e "2024 Exam Prep Guide").
+  4. Lista de `ProductCard` carregada de `GET /api/products` via `MarketplaceViewModel`. Estados: spinner durante o load, mensagem + botão "Tentar novamente" em erro, lista renderizada em sucesso.
 - `MainBottomBar(selected = 0)` — toque em "Meus Pedidos" navega.
 - O ícone do carrinho na top bar abre `CheckoutScreen`.
 

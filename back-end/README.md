@@ -71,9 +71,9 @@ back-end/
 | POST | `/api/auth/register` | — | `{email, password, name?}` → `{token, email}` |
 | POST | `/api/auth/login` | — | `{email, password}` → `{token, email}` |
 | GET | `/api/products` | — | Lista catálogo (`name, type, subtype, description, price`) |
-| GET | `/api/cart` | bearer | Itens do carrinho + total |
+| GET | `/api/cart` | bearer | Itens (`product_id, name, type, subtype, price, quantity, subtotal`) + total |
 | POST | `/api/cart/items` | bearer | `{product_id, quantity}` — incrementa se já existir |
-| DELETE | `/api/cart/items/{product_id}?quantity=N` | bearer | Remove item; com `quantity` decrementa (remove se ≥ atual) |
+| DELETE | `/api/cart/items/{product_id}?quantity=N` | bearer | Remove item; com `quantity` decrementa (remove se ≥ atual); sem `quantity` apaga o item inteiro |
 | POST | `/api/orders` | bearer | Cria pedido a partir do carrinho e o esvazia |
 | GET | `/api/orders` | bearer | Histórico de pedidos do usuário |
 
@@ -130,6 +130,20 @@ curl -X POST localhost:8000/api/cart/items \
 curl -X POST localhost:8000/api/orders \
   -H "Authorization: Bearer $TOKEN"
 ```
+
+## Autenticação
+
+Endpoints marcados como `bearer` aceitam o token de três formas no header `Authorization`:
+
+```
+Authorization: Bearer <token>
+Authorization: Token <token>
+Authorization: <token>
+```
+
+`apps/accounts/auth.BearerAuth` faz `header.split()[-1]` e valida só o último termo, então
+qualquer prefixo conhecido (ou nenhum) funciona. Padrão recomendado: `Bearer` (formato OpenAPI
+e o que o app Kotlin envia).
 
 ## Convenções
 

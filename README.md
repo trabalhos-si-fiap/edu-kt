@@ -8,10 +8,10 @@ Port nativo das telas do app Flutter `estuda_app` para Android usando **Kotlin**
 
 | Rota | Tela | Origem Flutter |
 |---|---|---|
-| `login` | Login (com login mock `teste`/`teste`) | `login_screen.dart` |
-| `register` | Cadastro (7 campos + validação) | `register_screen.dart` |
+| `login` | Login (autenticado via `POST /api/auth/login`) | `login_screen.dart` |
+| `register` | Cadastro (validação local + `POST /api/auth/register`) | `register_screen.dart` |
 | `home` | Placeholder pós-login com atalhos | — |
-| `marketplace` | EduMarketplace (busca, featured card, produtos) | `marketplace_screen.dart` |
+| `marketplace` | EduMarketplace (produtos via `GET /api/products`) | `marketplace_screen.dart` |
 | `checkout` | Revisão do Carrinho / Finalizar Pedido | `checkout_screen.dart` |
 | `orders` | Seus Pedidos (com stepper de entrega) | `orders_screen.dart` |
 
@@ -37,21 +37,29 @@ edu-kt/
     ├── build.gradle.kts
     └── src/main/
         ├── AndroidManifest.xml
-        ├── res/values/{strings.xml, themes.xml, font_certs.xml}
+        ├── res/
+        │   ├── values/{strings.xml, themes.xml, font_certs.xml}
+        │   └── xml/network_security_config.xml   # libera HTTP só p/ IP do backend
         └── java/br/com/edu/
             ├── MainActivity.kt              # NavHost + EduTheme
             ├── core/
+            │   ├── auth/TokenStore.kt       # singleton em memória do token
+            │   ├── network/{ApiClient, AuthInterceptor}.kt
             │   ├── theme/{Color,Type,Shape,Gradients,Theme}.kt
             │   └── ui/{EduTextField,EduButtons,EduCard,
             │           DottedBorderBox,BottomNavBars}.kt
             └── features/
-                ├── auth/presentation/
-                │   ├── LoginScreen.kt
-                │   └── RegisterScreen.kt
-                └── marketplace/presentation/
-                    ├── MarketplaceScreen.kt
-                    ├── CheckoutScreen.kt
-                    └── OrdersScreen.kt
+                ├── auth/
+                │   ├── data/AuthRepository.kt
+                │   ├── data/remote/{AuthApi, AuthDtos}.kt
+                │   └── presentation/{LoginScreen, LoginViewModel,
+                │           RegisterScreen, RegisterViewModel}.kt
+                └── marketplace/
+                    ├── data/MarketplaceRepository.kt
+                    ├── data/remote/{ProductApi, ProductDto}.kt
+                    ├── domain/Product.kt
+                    └── presentation/{MarketplaceScreen, MarketplaceViewModel,
+                            CheckoutScreen, OrdersScreen}.kt
 ```
 
 ## Pré-requisitos
