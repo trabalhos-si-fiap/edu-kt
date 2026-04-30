@@ -24,11 +24,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Insights
-import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,8 +39,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -51,11 +57,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.edu.core.theme.EduColors
 import br.com.edu.core.ui.DottedBorderBox
+import br.com.edu.features.cart.domain.Cart
+import br.com.edu.features.cart.domain.CartItem
+import br.com.edu.features.cart.presentation.CartUiState
+import br.com.edu.features.cart.presentation.CartViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CheckoutScreen(onBack: () -> Unit, onAddPaymentMethod: () -> Unit) {
+fun CheckoutScreen(
+    onBack: () -> Unit,
+    onAddPaymentMethod: () -> Unit,
+    cartViewModel: CartViewModel = CartViewModel.get(),
+) {
     var selectedPayment by remember { mutableIntStateOf(0) }
+    val cartState by cartViewModel.state.collectAsState()
+    val busy by cartViewModel.busy.collectAsState()
+
+    LaunchedEffect(Unit) { cartViewModel.load() }
 
     Scaffold(
         containerColor = EduColors.White,
@@ -97,27 +115,35 @@ fun CheckoutScreen(onBack: () -> Unit, onAddPaymentMethod: () -> Unit) {
             )
             Spacer(Modifier.height(20.dp))
 
-            CartItemCard(
-                category = "PREMIUM COURSE",
-                categoryBg = EduColors.PurpleSoft,
-                categoryFg = EduColors.Purple,
-                title = "Mastering Data Synthesis",
-                subtitle = "Education 5.0 Advanced Module",
-                price = "R\$ 189,90",
-                icon = Icons.Outlined.MenuBook,
-                imageBg = EduColors.CartImageBlue,
-            )
-            Spacer(Modifier.height(16.dp))
-            CartItemCard(
-                category = "DIGITAL TOOL",
-                categoryBg = EduColors.GreenSoft,
-                categoryFg = EduColors.GreenDark,
-                title = "Diagnostic AI Toolkit",
-                subtitle = "Lifetime Access Key",
-                price = "R\$ 45,00",
-                icon = Icons.Outlined.Insights,
-                imageBg = EduColors.CartImageDark,
-            )
+            when (val s = cartState) {
+                is CartUiState.Idle, is CartUiState.Loading -> {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = EduColors.Primary)
+                    }
+                }
+                is CartUiState.Error -> {
+                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(
+                            "Não foi possível carregar o carrinho.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = EduColors.TextPrimary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(s.message, color = EduColors.TextSecondary)
+                        Spacer(Modifier.height(12.dp))
+                        TextButton(onClick = { cartViewModel.load() }) {
+                            Text("Tentar novamente", color = EduColors.Primary)
+                        }
+                    }
+                }
+                is CartUiState.Ready -> CartItemsList(
+                    cart = s.cart,
+                    busy = busy,
+                    onDecrement = { cartViewModel.decrementItem(it.productId) },
+                    onRemoveAll = { cartViewModel.removeAll(it.productId) },
+                )
+            }
+
             Spacer(Modifier.height(32.dp))
 
             Text(
@@ -169,16 +195,54 @@ fun CheckoutScreen(onBack: () -> Unit, onAddPaymentMethod: () -> Unit) {
 }
 
 @Composable
-private fun CartItemCard(
-    category: String,
-    categoryBg: Color,
-    categoryFg: Color,
-    title: String,
-    subtitle: String,
-    price: String,
-    icon: ImageVector,
-    imageBg: Color,
+private fun CartItemsList(
+    cart: Cart,
+    busy: Boolean,
+    onDecrement: (CartItem) -> Unit,
+    onRemoveAll: (CartItem) -> Unit,
 ) {
+    if (cart.items.isEmpty()) {
+        Text(
+            "Seu carrinho está vazio.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = EduColors.TextSecondary,
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+        )
+        return
+    }
+    cart.items.forEachIndexed { idx, item ->
+        if (idx > 0) Spacer(Modifier.height(16.dp))
+        CartItemCard(
+            item = item,
+            enabled = !busy,
+            onDecrement = { onDecrement(item) },
+            onRemoveAll = { onRemoveAll(item) },
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text("Total", style = MaterialTheme.typography.titleLarge, color = EduColors.TextPrimary)
+        Text(
+            formatPriceBRL(cart.total),
+            style = MaterialTheme.typography.titleLarge,
+            color = EduColors.TextPrimary,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun CartItemCard(
+    item: CartItem,
+    enabled: Boolean,
+    onDecrement: () -> Unit,
+    onRemoveAll: () -> Unit,
+) {
+    val (categoryBg, categoryFg) = colorsFor(item.type)
+    val icon = iconFor(item.type)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -190,42 +254,85 @@ private fun CartItemCard(
                 Modifier
                     .width(96.dp)
                     .height(110.dp)
-                    .background(imageBg, RoundedCornerShape(12.dp)),
+                    .background(EduColors.CartImageBlue, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(icon, null, tint = EduColors.White.copy(alpha = 0.85f), modifier = Modifier.size(40.dp))
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Surface(
-                    color = categoryBg,
-                    shape = RoundedCornerShape(20.dp),
-                ) {
-                    Text(
-                        category,
-                        color = categoryFg,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    )
+                Row(verticalAlignment = Alignment.Top) {
+                    Surface(color = categoryBg, shape = RoundedCornerShape(20.dp), modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            item.subtype.uppercase().ifBlank { item.type.uppercase() },
+                            color = categoryFg,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(
+                        onClick = { if (enabled) onRemoveAll() },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "Excluir item",
+                            tint = EduColors.TextSecondary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text(title, style = MaterialTheme.typography.titleMedium, color = EduColors.TextPrimary)
+                Text(item.name, style = MaterialTheme.typography.titleMedium, color = EduColors.TextPrimary)
                 Spacer(Modifier.height(4.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = EduColors.TextSecondary)
-                Spacer(Modifier.height(10.dp))
-                Text(price, style = MaterialTheme.typography.titleMedium, color = EduColors.TextPrimary)
-                Spacer(Modifier.height(6.dp))
                 Text(
-                    "Remover",
-                    color = EduColors.Danger,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.sp,
-                    modifier = Modifier.clickable {},
+                    "Qtd: ${item.quantity} • ${formatPriceBRL(item.price)} cada",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = EduColors.TextSecondary,
                 )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    formatPriceBRL(item.subtotal),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = EduColors.TextPrimary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Outlined.Remove,
+                        null,
+                        tint = EduColors.Danger,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "Remover 1",
+                        color = EduColors.Danger,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable(enabled = enabled) { onDecrement() },
+                    )
+                }
             }
         }
     }
+}
+
+private fun formatPriceBRL(raw: String): String {
+    val value = raw.toDoubleOrNull() ?: return "R$ $raw"
+    return "R$ %,.2f".format(value).replace(',', 'X').replace('.', ',').replace('X', '.')
+}
+
+private fun iconFor(type: String): ImageVector = when (type.lowercase()) {
+    "apostila", "apostila_digital", "digital" -> Icons.AutoMirrored.Outlined.MenuBook
+    else -> Icons.Outlined.Insights
+}
+
+private fun colorsFor(type: String): Pair<Color, Color> = when (type.lowercase()) {
+    "apostila", "apostila_digital", "digital" -> EduColors.PurpleSoft to EduColors.Purple
+    else -> EduColors.GreenSoft to EduColors.GreenDark
 }
 
 @Composable
