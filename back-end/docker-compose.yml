@@ -1,0 +1,42 @@
+services:
+  migrate:
+    build: .
+    container_name: edu-migrate
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_DB_PATH: /data/db.sqlite3
+    volumes:
+      - ./:/app
+      - /app/.venv
+      - ./data:/data
+    command: >
+      sh -c "uv run python manage.py migrate --noinput
+      && uv run python manage.py seed_catalog
+      && uv run python manage.py seed_admin"
+
+  api:
+    build: .
+    container_name: edu-api
+    init: true
+    stop_signal: SIGINT
+    stop_grace_period: 3s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_DEBUG: "1"
+      DJANGO_DB_PATH: /data/db.sqlite3
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./:/app
+      - /app/.venv
+      - ./data:/data
+    command: >
+      uv run granian --interface asgi config.asgi:application
+      --host 0.0.0.0 --port 8000
+      --workers 1 --runtime-threads 1
+      --reload --reload-paths /app
+      --reload-ignore-dirs data --reload-ignore-dirs .venv
+      --reload-ignore-patterns "\\.pyc$$" --reload-ignore-patterns "__pycache__"
