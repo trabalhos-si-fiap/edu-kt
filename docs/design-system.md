@@ -59,9 +59,11 @@ Família única: **Lexend Deca** via `androidx.compose.ui:ui-text-google-fonts` 
 | `DottedBorderBox` | Borda tracejada (`Modifier.drawBehind` + `PathEffect`). Usada no "Outro método" do Checkout. |
 | `AuthBottomBar` | Barra inferior de 2 itens (Entrar / Cadastro). |
 | `MainBottomBar` | Barra inferior de 2 itens (Loja / Meus Pedidos). |
+| `formatBRL` (`CurrencyFormat.kt`) | Formata valores monetários no padrão pt-BR via `NumberFormat.getCurrencyInstance(Locale("pt", "BR"))`. Aceita `String` (preço cru do backend) ou `Double`. |
 
 ## Diretrizes
 
 - **Espaçamento canônico**: padding horizontal de tela = 24.dp; gap vertical entre seções = 16-24.dp; gap label→input = 8.dp.
 - **Sombra**: discreta, `shadowElevation = 4.dp` por padrão. Featured cards podem subir para 8.
 - **Sempre via tokens** — não usar `Color(0xFF...)` direto em telas, importar de `EduColors`. O mesmo para tipografia (`MaterialTheme.typography.X`) em vez de `TextStyle` ad-hoc.
+- **Moeda** — qualquer valor monetário na UI passa por `formatBRL` (locale pt-BR). Não montar `"R$ ..."` à mão nem usar `String.format` com locale default.

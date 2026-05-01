@@ -11,7 +11,9 @@ Implementada com [`androidx.navigation:navigation-compose`](https://developer.an
 | `marketplace` | `MarketplaceScreen` | Sucesso do login (substitui `login` no back stack) |
 | `checkout` | `CheckoutScreen` | Ícone do carrinho na top bar do Marketplace |
 | `add-payment-method` | `AddPaymentMethodScreen` | Botão "Outro método" no Checkout |
+| `edit-payment-method/{id}` | `AddPaymentMethodScreen` (modo edição) | Toque em método existente no Checkout |
 | `orders` | `OrdersScreen` | Aba "Meus Pedidos" da `MainBottomBar` ou ícone de notificações |
+| `profile` | `ProfileScreen` | Ícone de perfil na top bar do Marketplace ou aba "Perfil" da `MainBottomBar` |
 
 ## Mapa de transições
 
@@ -37,7 +39,10 @@ Implementada com [`androidx.navigation:navigation-compose`](https://developer.an
               │   └─────────────────────┘
               │
               │     ┌──────────┐
-              └─────│  orders  │
+              ├─────│  orders  │
+              │     └──────────┘
+              │     ┌──────────┐
+              └─────│ profile  │  ← logout: popUpTo(0) → login
                     └──────────┘
 ```
 

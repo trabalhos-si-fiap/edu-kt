@@ -30,8 +30,10 @@ Lista funcional de cada Composable de tela. Para layout visual, ver o [Design Sy
   2. Search bar (apenas UI, sem filtro real).
   3. **Featured card** (bg `Primary`) com tag "EDUCAÇÃO 5.0" e CTA roxo "Explorar Coleção".
   4. Lista de `ProductCard` carregada de `GET /api/products` via `MarketplaceViewModel`. Estados: spinner durante o load, mensagem + botão "Tentar novamente" em erro, lista renderizada em sucesso.
-- `MainBottomBar(selected = 0)` — toque em "Meus Pedidos" navega.
+- Cada `ProductCard` exibe **estrelas (1–5)** com média + contagem (`RatingStars`). Toque nas estrelas (quando `ratingCount > 0`) abre o `ReviewsBottomSheet`, que carrega `GET /api/products/{id}/reviews` e renderiza autor, rating e comentário por avaliação.
+- `MainBottomBar(selected = 0)` — toque em "Meus Pedidos" / "Perfil" navega.
 - O ícone do carrinho na top bar abre `CheckoutScreen`.
+- O ícone de perfil na top bar (`PersonOutline`) abre `ProfileScreen`.
 
 ## Checkout (`features/marketplace/presentation/CheckoutScreen.kt`)
 
@@ -52,18 +54,28 @@ Lista funcional de cada Composable de tela. Para layout visual, ver o [Design Sy
   - **PIX**: chave + caixa verde "Aprovação imediata após o pagamento."
   - **Boleto**: caixa cinza com aviso de compensação.
 - Checkbox **Definir como método padrão** (estado local; ainda não persistido).
-- Botão roxo **Salvar método** valida cartão (≥13 dígitos, nome, validade ≥4 dígitos, CVV ≥3) e volta com Snackbar.
+- Botão roxo **Salvar método** valida cartão (≥13 dígitos, nome, validade ≥4 dígitos, CVV ≥3) e volta com Snackbar. Validação e formatação ficam em `features/payment/domain/CardFormatting.kt` (cobertas por `app/src/test/.../CardFormattingTest.kt`).
 - Rodapé "Pagamentos protegidos com criptografia".
+
+## Perfil (`features/profile/presentation/ProfileScreen.kt`)
+
+- TopAppBar com seta voltar + título "Perfil".
+- Header com avatar circular roxo (inicial do nome) + nome e e-mail.
+- Card **Dados pessoais** com nome, telefone e data de nascimento. Botão de lápis no canto entra em modo de edição inline com `TextField`s (nome, telefone com `KeyboardType.Phone`, data de nascimento `AAAA-MM-DD`); Salvar dispara `PATCH /api/auth/me`, Cancelar descarta. Erros do servidor aparecem em texto vermelho abaixo dos campos.
+- Seção **Atalhos**: cards clicáveis "Meus pedidos" → `OrdersScreen`, "Métodos de pagamento" → `CheckoutScreen` (placeholder até existir tela própria).
+- Botão **Sair da conta** (vermelho suave) chama `TokenStore.clear()` e navega para `login` com `popUpTo(0)`.
+- `MainBottomBar(selected = 2)` — toque em "Loja" volta ao Marketplace (com `popUpTo("marketplace") { inclusive = true }`), "Meus Pedidos" navega.
+- **Backend**: `GET /api/auth/me` no `LaunchedEffect(Unit)` via `ProfileViewModel` → `UserRepository`. Estados: `Loading`, `Ready(profile, isEditing, saving, saveError)`, `Error(message)`.
 
 ## Pedidos (`features/marketplace/presentation/OrdersScreen.kt`)
 
 - TopAppBar com seta voltar + perfil + sino.
 - Título "Seus pedidos".
-- **Pedido ativo**:
-  - Badge `Pedido ativo` (`PurpleSoft`).
-  - ID, data de compra e total destacado.
-  - **OrderStepper** (3 etapas: Separação, Trânsito, Entregue) — etapa atual e anteriores ficam roxas; pendentes em cinza.
-  - Caixa cinza com data prevista e localização do pacote.
-  - Botão "Detalhes do pedido" (placeholder).
-- **Pedido entregue**: card com bg `InputFill`, badge verde "ENTREGUE", thumbnails dos itens, contagens, botões "Comprar novamente" (roxo claro) e "Avaliar itens" (branco).
-- Enum `OrderStep { Picking, Transit, Delivered }`.
+- **Backend**: `GET /api/orders` via `OrdersViewModel` → `OrdersRepository`. Estados: `Loading`, `Ready(orders)` (vazio mostra empty state "Você ainda não fez nenhum pedido"), `Error(message)` com botão "Tentar novamente".
+- **Card de pedido entregue** (todos os pedidos retornados pelo backend são tratados como entregues — modelo atual não tem status):
+  - Header: `#EDU-NNNNNN` (id zero-paddado em 6 dígitos) + data formatada em pt-BR, badge verde "ENTREGUE".
+  - **Carrossel** (`LazyRow`) com card por item (largura 180dp, altura fixa 232dp): imagem (Coil/`SubcomposeAsyncImage` com placeholder), nome (2 linhas reservadas via `minLines = 2`), avaliação (estrela amber + `rating_avg` `(rating_count)` ou "Sem avaliações"), `xN` e preço unitário formatado em BRL.
+  - Linha de resumo: total de itens (somando `quantity`) + total formatado.
+  - Botão **"Comprar novamente"** → `viewModel.rebuy(order.id)` → `POST /api/orders/{id}/rebuy` (incrementa carrinho com itens do pedido) → navega para `checkout`.
+  - Botão **"Avaliar itens"** → abre `AlertDialog` com seletor de estrelas (`StarPicker` 1–5) por item; submit dispara `submitReviews(map)` que faz um `POST /api/products/{id}/reviews` por item avaliado (autor derivado de `user.get_full_name()` ou `email`) e recarrega a lista para refletir as novas médias.
+- Eventos de ação (`OrdersAction.RebuySuccess` / `ReviewsSubmitted` / `Error`) saem do ViewModel via `StateFlow<OrdersAction?>`, consumidos no `LaunchedEffect(action)` da tela e exibidos via `SnackbarHost`.

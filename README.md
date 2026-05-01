@@ -83,6 +83,7 @@ export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
 ## Quick start (clonou agora?)
 
 ```bash
+
 make doctor   # confere JDK, Docker, porta 8000, AVD e IP atual
 make dev      # setup + IP + sobe backend + emulador + instala/abre o app
 ```

@@ -9,10 +9,13 @@ Estado atual da integração entre o app Android e o backend Django, e as diretr
 | Feature | Endpoint | Status |
 |---|---|---|
 | Login | `POST /api/auth/login` | ✅ Tela `LoginScreen` chama o backend, salva token, navega ao Marketplace |
-| Cadastro | `POST /api/auth/register` | ✅ Tela `RegisterScreen` valida localmente e cria conta no backend |
-| Catálogo | `GET /api/products` | ✅ `MarketplaceScreen` lista produtos reais (loading/erro/retry) |
+| Cadastro | `POST /api/auth/register` | ✅ Tela `RegisterScreen` valida localmente e cria conta no backend; persiste `name`/`phone`/`birth_date` (nome é dividido em `first_name` + `last_name`) |
+| Perfil | `GET /api/auth/me`, `PATCH /api/auth/me` | ✅ `ProfileScreen` carrega e edita nome/telefone/data de nascimento; ambas exigem `Authorization: Bearer <key>`. `birth_date` em ISO `YYYY-MM-DD` (string vazia limpa o campo); formato inválido retorna 400 |
+| Catálogo | `GET /api/products` | ✅ `MarketplaceScreen` lista produtos reais com imagem (Coil), com busca server-side (`?q=`) e paginação (`?limit=&offset=`); resposta `{items, total, limit, offset}` inclui `rating_avg` (0–5) e `rating_count` por produto. Campo de busca debounce 300ms no `MarketplaceViewModel`. |
+| Avaliações | `GET /api/products/{id}/reviews` | ✅ `ReviewsBottomSheet` abre ao tocar nas estrelas do card; resposta `{items, total, rating_avg, rating_count}` com `author/rating/comment/created_at`. Paginação `?limit=&offset=`. |
 | Carrinho | `/api/cart/*` | ✅ `CartViewModel` singleton sincroniza add/remove com o backend; `CheckoutScreen` lê do servidor |
-| Pedidos | `/api/orders/*` | ⏳ não conectado |
+| Pedidos | `POST /api/orders`, `GET /api/orders`, `POST /api/orders/{id}/rebuy` | ✅ `CheckoutScreen` cria o pedido (esvazia o carrinho server-side) e `OrdersScreen` lista. Cada item vem com `image_url`, `rating_avg`, `rating_count` para o carrossel. "Comprar novamente" chama `rebuy` (incrementa carrinho). |
+| Avaliação pós-compra | `POST /api/products/{id}/reviews` | ✅ Diálogo "Avaliar itens" envia uma `Review` por item com nota 1–5; autor derivado do `user.get_full_name()` ou `email`. |
 
 ## Configuração de rede
 
@@ -101,18 +104,49 @@ features/auth/
 ```
 
 ```
+features/profile/
+├── data/
+│   ├── UserRepository.kt          # GET/PATCH wrappers, DTO → domínio
+│   └── remote/
+│       ├── UserApi.kt             # GET /auth/me, PATCH /auth/me
+│       └── UserDto.kt             # UserDto + UserPatchDto (campos nullable)
+├── domain/
+│   └── UserProfile.kt
+└── presentation/
+    ├── ProfileScreen.kt           # header + edição inline + atalhos + logout
+    └── ProfileViewModel.kt        # Loading / Ready(isEditing, saving, saveError) / Error
+```
+
+```
 features/marketplace/
 ├── data/
-│   ├── MarketplaceRepository.kt   # DTO → domínio
+│   ├── MarketplaceRepository.kt   # DTO → domínio (produtos + reviews)
 │   └── remote/
-│       ├── ProductApi.kt
-│       └── ProductDto.kt
+│       ├── ProductApi.kt          # GET /products, GET/POST /products/{id}/reviews
+│       └── ProductDto.kt          # ProductDto / ReviewDto / ReviewInDto + envelopes paginados
 ├── domain/
-│   └── Product.kt
+│   └── Product.kt                 # Product (com ratingAvg/ratingCount) + Review
 └── presentation/
     ├── MarketplaceScreen.kt
-    └── MarketplaceViewModel.kt    # Loading / Ready(products) / Error(message)
+    ├── RatingStars.kt             # 5 estrelas com meio-ponto, cor âmbar
+    ├── ReviewsBottomSheet.kt      # ModalBottomSheet com lista de avaliações
+    └── MarketplaceViewModel.kt    # state (Loading/Ready/Error) + reviews (Hidden/Loading/Ready/Error)
 ```
+
+```
+features/orders/
+├── data/
+│   ├── OrdersRepository.kt        # listOrders / placeOrder / rebuy
+│   └── remote/
+│       ├── OrderApi.kt            # GET /orders, POST /orders, POST /orders/{id}/rebuy
+│       └── OrderDto.kt            # OrderDto + OrderItemDto (image_url, rating_avg, rating_count)
+├── domain/
+│   └── Order.kt                   # Order + OrderItem (com itemsCount derivado)
+└── presentation/
+    └── OrdersViewModel.kt         # state (Loading/Ready/Error) + action (RebuySuccess/ReviewsSubmitted/Error)
+```
+
+Tela `OrdersScreen` vive em `features/marketplace/presentation/` (junto com checkout) por conveniência de navegação.
 
 Convenções:
 - **DTOs ficam em `data/remote`**, marcados com `@Serializable`. Espelham o JSON cru do backend.
@@ -138,9 +172,22 @@ Quando a base de erros crescer:
 ## Mapeamento de campos sensíveis
 
 - `price` vem como **string** do django-ninja (serialização padrão de `Decimal`).
-  O DTO recebe `String`; a tela formata para `R$ 49,90`.
-- `birth_date` no `RegisterRequest` vai como string (formato livre por enquanto). Se virar
-  validação estrita no backend, padronizar `yyyy-MM-dd`.
+  O DTO recebe `String`; a tela formata via `core/ui/CurrencyFormat.kt::formatBRL`,
+  que usa `NumberFormat.getCurrencyInstance(Locale("pt", "BR"))` (ex.: `R$ 49,90`).
+  Use sempre esse helper para qualquer valor monetário na UI — não reimplementar formatação local.
+- `image_url` vem como string (pode ser vazia). `ProductDto` mapeia via `@SerialName("image_url")`
+  para `imageUrl` (default `""`). `MarketplaceScreen` renderiza com `SubcomposeAsyncImage` (Coil)
+  e cai no ícone-placeholder original em loading/erro/url vazia.
+- `rating_avg` (float, 0.0 quando sem avaliações) e `rating_count` (int) são agregados
+  pelo backend via `Avg("reviews__rating")` / `Count("reviews")` em `ProductOut`.
+  `RatingStars` arredonda para meio-ponto (`(rating*2).roundToInt()`); o card só
+  abre o bottom sheet quando `ratingCount > 0`.
+- `birth_date` é validado como ISO `YYYY-MM-DD` no backend (`date.fromisoformat`). Inválido →
+  400 `{"detail": "Invalid birth_date format, expected YYYY-MM-DD"}`. No `PATCH /auth/me`,
+  string vazia limpa o campo (vira `null`); ausência (`null` no JSON) deixa como está.
+- `UserOut` lista campos explicitamente (`id`, `email`, `name`, `phone`, `birth_date`,
+  `date_joined`) — `from_attributes` é evitado para não vazar campos sensíveis do `User`
+  (regra de segurança #6 do `CLAUDE.md`).
 
 ## O que ainda fica só no celular
 
@@ -197,8 +244,9 @@ exigir uso offline.
 
 ## Ordem de implementação restante
 
-1. **Checkout** — fechar pedido (`POST /api/orders`), tratar resposta de pagamento, esvaziar `CartViewModel`.
-2. **Lista de pedidos** — `GET /api/orders`, ligar `OrdersScreen`.
+1. **Status de pedido no backend** — modelo atual de `Order` não tem `status`/etapa de entrega. Frontend trata todo pedido como entregue. Adicionar `status` (ex: `picking|transit|delivered`) + estimativa para reabilitar `ActiveOrderCard` com stepper.
+2. **Tela de métodos de pagamento dedicada** — hoje o atalho do Perfil cai no `CheckoutScreen`; criar rota própria com listagem e edição.
 3. **Persistência do token** — DataStore.
 4. **Refresh / 401 handling**.
 5. **Push (FCM)** — quando houver evento de status de pedido pelo backend.
+6. **Restringir review por compra** — endpoint atual aceita review de qualquer produto autenticado; ideal exigir que o usuário tenha um `OrderItem` daquele produto.
