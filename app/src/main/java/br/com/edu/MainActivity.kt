@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,7 +16,9 @@ import br.com.edu.features.auth.presentation.RegisterScreen
 import br.com.edu.features.marketplace.presentation.AddPaymentMethodScreen
 import br.com.edu.features.marketplace.presentation.CheckoutScreen
 import br.com.edu.features.marketplace.presentation.MarketplaceScreen
+import br.com.edu.features.marketplace.presentation.MarketplaceViewModel
 import br.com.edu.features.marketplace.presentation.OrdersScreen
+import br.com.edu.features.marketplace.presentation.ProductDetailScreen
 import br.com.edu.features.profile.presentation.ProfileScreen
 import br.com.edu.features.support.presentation.SupportScreen
 
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun EduApp() {
     val nav = rememberNavController()
+    val marketplaceVm: MarketplaceViewModel = viewModel()
     NavHost(navController = nav, startDestination = "login") {
         composable("login") {
             LoginScreen(
@@ -51,7 +55,10 @@ private fun EduApp() {
                 onOpenCart = { nav.navigate("checkout") },
                 onOpenOrders = { nav.navigate("orders") },
                 onOpenProfile = { nav.navigate("profile") },
+                onOpenSupport = { nav.navigate("support") },
                 onBack = { nav.popBackStack() },
+                onOpenProductDetail = { id -> nav.navigate("product-detail/$id") },
+                viewModel = marketplaceVm,
             )
         }
         composable("profile") {
@@ -95,6 +102,26 @@ private fun EduApp() {
             OrdersScreen(
                 onBack = { nav.popBackStack() },
                 onOpenCheckout = { nav.navigate("checkout") },
+                onOpenMarketplace = {
+                    nav.navigate("marketplace") {
+                        popUpTo("marketplace") { inclusive = true }
+                    }
+                },
+                onOpenSupport = { nav.navigate("support") },
+                onOpenProfile = { nav.navigate("profile") },
+            )
+        }
+        composable(
+            route = "product-detail/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.IntType }),
+        ) { entry ->
+            ProductDetailScreen(
+                productId = entry.arguments?.getInt("id") ?: 0,
+                onBack = { nav.popBackStack() },
+                onOpenProfile = { nav.navigate("profile") },
+                onOpenCart = { nav.navigate("checkout") },
+                onSearchInteract = { nav.popBackStack("marketplace", inclusive = false) },
+                marketplaceViewModel = marketplaceVm,
             )
         }
         composable("add-payment-method") {
