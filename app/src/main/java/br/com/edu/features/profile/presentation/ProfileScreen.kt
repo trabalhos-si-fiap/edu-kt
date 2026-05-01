@@ -62,7 +62,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -122,11 +126,12 @@ fun ProfileScreen(
         },
         bottomBar = {
             MainBottomBar(
-                selected = 2,
+                selected = 3,
                 onTabSelected = { index ->
                     when (index) {
                         0 -> onOpenMarketplace()
                         1 -> onOpenOrders()
+                        2 -> onOpenSupport()
                     }
                 },
             )
@@ -309,7 +314,12 @@ private fun ProfileDataCard(
             } else {
                 ReadOnlyField(label = "Nome", value = profile.name.ifBlank { "—" })
                 Spacer(Modifier.height(12.dp))
-                ReadOnlyField(label = "Telefone", value = profile.phone.ifBlank { "—" })
+                ReadOnlyField(
+                    label = "Telefone",
+                    value = profile.phone.ifBlank { "—" }.let {
+                        if (it == "—") it else formatPhoneBR(it)
+                    },
+                )
                 Spacer(Modifier.height(12.dp))
                 ReadOnlyField(
                     label = "Data de nascimento",
@@ -343,7 +353,7 @@ private fun EditForm(
     onSave: (String, String, String) -> Unit,
 ) {
     var name by rememberSaveable(profile.id) { mutableStateOf(profile.name) }
-    var phone by rememberSaveable(profile.id) { mutableStateOf(profile.phone) }
+    var phone by rememberSaveable(profile.id) { mutableStateOf(profile.phone.filter(Char::isDigit).take(11)) }
     var birthDate by rememberSaveable(profile.id) { mutableStateOf(profile.birthDate.orEmpty()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -352,9 +362,10 @@ private fun EditForm(
         FieldLabel("Telefone")
         EduTextField(
             value = phone,
-            onValueChange = { phone = it },
+            onValueChange = { phone = it.filter(Char::isDigit).take(11) },
             placeholder = "(11) 99999-9999",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+            visualTransformation = PhoneVisualTransformation,
         )
         FieldLabel("Data de nascimento")
         BirthDateField(value = birthDate, onValueChange = { birthDate = it })
@@ -875,5 +886,47 @@ private fun AddressFormDialog(
                 }
             }
         }
+    }
+}
+
+private fun formatPhoneBR(raw: String): String {
+    val d = raw.filter(Char::isDigit).take(11)
+    return when (d.length) {
+        0 -> ""
+        1, 2 -> "(${d}"
+        in 3..6 -> "(${d.substring(0, 2)}) ${d.substring(2)}"
+        in 7..10 -> "(${d.substring(0, 2)}) ${d.substring(2, 6)}-${d.substring(6)}"
+        else -> "(${d.substring(0, 2)}) ${d.substring(2, 7)}-${d.substring(7)}"
+    }
+}
+
+private object PhoneVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val digits = text.text.filter(Char::isDigit).take(11)
+        val formatted = formatPhoneBR(digits)
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                val o = offset.coerceIn(0, digits.length)
+                val t = when {
+                    o == 0 -> 0
+                    o <= 2 -> o + 1
+                    o <= 7 -> o + 3
+                    else -> o + 4
+                }
+                return t.coerceAtMost(formatted.length)
+            }
+            override fun transformedToOriginal(offset: Int): Int {
+                val o = offset.coerceIn(0, formatted.length)
+                return when {
+                    o <= 1 -> 0
+                    o <= 3 -> o - 1
+                    o <= 5 -> 2
+                    o <= 10 -> o - 3
+                    o <= 11 -> 7
+                    else -> (o - 4).coerceAtMost(digits.length)
+                }
+            }
+        }
+        return TransformedText(AnnotatedString(formatted), mapping)
     }
 }
