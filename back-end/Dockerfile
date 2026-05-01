@@ -23,5 +23,6 @@ ENV DJANGO_DB_PATH=/data/db.sqlite3
 EXPOSE 8000
 
 CMD sh -c "uv run python manage.py migrate --noinput \
+    && uv run python manage.py collectstatic --noinput \
     && uv run python manage.py loaddata apps/catalog/fixtures/seed.json \
     && uv run granian --interface asgi config.asgi:application --host 0.0.0.0 --port 8000"
