@@ -1,6 +1,7 @@
 package br.com.edu.features.support.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -35,6 +37,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,9 +89,10 @@ fun SupportScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Suporte",
+                        "Suporte de Pedidos",
+                        style = MaterialTheme.typography.titleLarge,
                         color = EduColors.TextPrimary,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
                     )
                 },
                 navigationIcon = {
@@ -100,12 +105,12 @@ fun SupportScreen(
         },
         bottomBar = {
             MainBottomBar(
-                selected = -1,
+                selected = 2,
                 onTabSelected = { index ->
                     when (index) {
                         0 -> onOpenMarketplace()
                         1 -> onOpenOrders()
-                        2 -> onOpenProfile()
+                        3 -> onOpenProfile()
                     }
                 },
             )
@@ -117,8 +122,6 @@ fun SupportScreen(
                 .fillMaxSize()
                 .imePadding(),
         ) {
-            Header()
-            Spacer(Modifier.height(12.dp))
             ChatPanel(
                 state = state,
                 onSend = viewModel::send,
@@ -130,31 +133,6 @@ fun SupportScreen(
             )
             Spacer(Modifier.height(8.dp))
         }
-    }
-}
-
-@Composable
-private fun Header() {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            "Suporte de Pedidos",
-            style = MaterialTheme.typography.headlineMedium,
-            color = EduColors.TextPrimary,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Gerencie suas entregas e tire dúvidas com seu mentor acadêmico em tempo real.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = EduColors.TextSecondary,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 
@@ -335,34 +313,59 @@ private fun InputBar(
         scope.launch { onSend(toSend) }
     }
 
-    Row(
+    Surface(
+        color = EduColors.White,
+        shape = RoundedCornerShape(28.dp),
+        shadowElevation = 4.dp,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.weight(1f)) {
-            EduTextField(
+        Row(
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextField(
                 value = text,
                 onValueChange = { text = it },
-                placeholder = "Escreva sua mensagem aqui...",
-                singleLine = false,
+                placeholder = {
+                    Text(
+                        "Escreva sua mensagem aqui...",
+                        color = EduColors.TextSecondary,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                },
                 enabled = !sending,
+                singleLine = false,
+                maxLines = 4,
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = EduColors.TextPrimary),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    disabledIndicatorColor = Color.Transparent,
+                    cursorColor = EduColors.Purple,
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp),
             )
-        }
-        Spacer(Modifier.size(8.dp))
-        Box(
-            Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(if (canSend) EduColors.Primary else EduColors.Primary.copy(alpha = 0.4f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            IconButton(onClick = ::submit, enabled = canSend) {
+            Spacer(Modifier.size(8.dp))
+            Box(
+                Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(if (canSend) EduColors.Primary else EduColors.Primary.copy(alpha = 0.4f))
+                    .clickable(enabled = canSend, onClick = ::submit),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(
                     Icons.AutoMirrored.Outlined.Send,
                     contentDescription = "Enviar",
                     tint = EduColors.White,
+                    modifier = Modifier.size(22.dp),
                 )
             }
         }
