@@ -51,26 +51,52 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
 import br.com.edu.core.theme.EduColors
+import br.com.edu.core.theme.EduGradients
 import br.com.edu.core.ui.EduPurpleButton
 import br.com.edu.core.ui.EduTextField
+import br.com.edu.features.payment.domain.CardNumberTransformation
+import br.com.edu.features.payment.domain.ExpiryTransformation
+import br.com.edu.features.payment.domain.PaymentMethod
+import br.com.edu.features.payment.domain.PaymentMethodType
+import br.com.edu.features.payment.domain.brandFromNumber
+import br.com.edu.features.payment.domain.message
+import br.com.edu.features.payment.domain.sanitizeCardNumber
+import br.com.edu.features.payment.domain.sanitizeCvv
+import br.com.edu.features.payment.domain.sanitizeExpiry
+import br.com.edu.features.payment.domain.validateCreditCardForm
+import br.com.edu.features.payment.presentation.PaymentMethodViewModel
 import kotlinx.coroutines.launch
 
 private enum class PaymentType { CreditCard, Pix, Boleto }
 
+private fun PaymentMethodType.toUi(): PaymentType = when (this) {
+    PaymentMethodType.CREDIT_CARD -> PaymentType.CreditCard
+    PaymentMethodType.PIX -> PaymentType.Pix
+    PaymentMethodType.BOLETO -> PaymentType.Boleto
+}
+
+private fun PaymentType.toDomain(): PaymentMethodType = when (this) {
+    PaymentType.CreditCard -> PaymentMethodType.CREDIT_CARD
+    PaymentType.Pix -> PaymentMethodType.PIX
+    PaymentType.Boleto -> PaymentMethodType.BOLETO
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddPaymentMethodScreen(onBack: () -> Unit) {
+fun AddPaymentMethodScreen(
+    onBack: () -> Unit,
+    editingId: String? = null,
+    viewModel: PaymentMethodViewModel = PaymentMethodViewModel.get(),
+) {
+    val isEditing = editingId != null
     var selected by rememberSaveable { mutableStateOf(PaymentType.CreditCard) }
     var cardNumber by rememberSaveable { mutableStateOf("") }
     var cardName by rememberSaveable { mutableStateOf("") }
@@ -78,16 +104,35 @@ fun AddPaymentMethodScreen(onBack: () -> Unit) {
     var cvv by rememberSaveable { mutableStateOf("") }
     var pixKey by rememberSaveable { mutableStateOf("") }
     var saveAsDefault by rememberSaveable { mutableStateOf(false) }
+    var existingLast4 by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
+    LaunchedEffect(editingId) {
+        if (editingId != null) {
+            val existing = viewModel.getById(editingId)
+            if (existing != null) {
+                selected = existing.type.toUi()
+                cardName = existing.cardholderName.orEmpty()
+                expiry = existing.cardExpiry.orEmpty()
+                pixKey = existing.pixKey.orEmpty()
+                saveAsDefault = existing.isDefault
+                existingLast4 = existing.cardLast4
+                cardNumber = ""
+            }
+        }
+    }
+
     Scaffold(
-        containerColor = EduColors.White,
+        containerColor = Color.Transparent,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(EduGradients.Background),
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Adicionar Método",
+                        if (isEditing) "Editar Método" else "Adicionar Método",
                         style = MaterialTheme.typography.titleMedium,
                         color = EduColors.TextPrimary,
                     )
@@ -97,7 +142,7 @@ fun AddPaymentMethodScreen(onBack: () -> Unit) {
                         Icon(Icons.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = EduColors.White),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHost) },
@@ -119,16 +164,27 @@ fun AddPaymentMethodScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(28.dp))
 
             when (selected) {
-                PaymentType.CreditCard -> CardFields(
-                    number = cardNumber,
-                    onNumberChange = { v -> cardNumber = v.filter { it.isDigit() }.take(19) },
-                    name = cardName,
-                    onNameChange = { cardName = it.uppercase() },
-                    expiry = expiry,
-                    onExpiryChange = { v -> expiry = v.filter { it.isDigit() }.take(4) },
-                    cvv = cvv,
-                    onCvvChange = { v -> cvv = v.filter { it.isDigit() }.take(4) },
-                )
+                PaymentType.CreditCard -> {
+                    if (isEditing && existingLast4 != null && cardNumber.isBlank()) {
+                        InfoBox(
+                            background = EduColors.InputFill,
+                            contentColor = EduColors.TextSecondary,
+                            icon = Icons.Outlined.CreditCard,
+                            message = "Cartão atual final ${existingLast4}. Informe um novo número apenas se quiser substituir.",
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    CardFields(
+                        number = cardNumber,
+                        onNumberChange = { cardNumber = sanitizeCardNumber(it) },
+                        name = cardName,
+                        onNameChange = { cardName = it.uppercase() },
+                        expiry = expiry,
+                        onExpiryChange = { expiry = sanitizeExpiry(it) },
+                        cvv = cvv,
+                        onCvvChange = { cvv = sanitizeCvv(it) },
+                    )
+                }
                 PaymentType.Pix -> PixFields(pixKey = pixKey, onPixChange = { pixKey = it })
                 PaymentType.Boleto -> BoletoInfo()
             }
@@ -138,24 +194,59 @@ fun AddPaymentMethodScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
 
             EduPurpleButton(
-                text = "Salvar método",
+                text = if (isEditing) "Salvar alterações" else "Salvar método",
                 onClick = {
                     val error = when (selected) {
-                        PaymentType.CreditCard -> when {
-                            cardNumber.length < 13 -> "Número de cartão inválido"
-                            cardName.isBlank() -> "Informe o nome"
-                            expiry.length < 4 -> "Validade inválida"
-                            cvv.length < 3 -> "CVV inválido"
-                            else -> null
-                        }
-                        else -> null
+                        PaymentType.CreditCard -> validateCreditCardForm(
+                            cardNumber = cardNumber,
+                            cardName = cardName,
+                            expiry = expiry,
+                            cvv = cvv,
+                            isEditing = isEditing,
+                        )?.message()
+                        PaymentType.Pix -> if (pixKey.isBlank()) "Informe a chave PIX" else null
+                        PaymentType.Boleto -> null
                     }
                     if (error != null) {
                         scope.launch { snackbarHost.showSnackbar(error) }
-                    } else {
-                        scope.launch { snackbarHost.showSnackbar("Método de pagamento adicionado") }
-                        onBack()
+                        return@EduPurpleButton
                     }
+
+                    val method = when (selected) {
+                        PaymentType.CreditCard -> {
+                            val last4 = if (cardNumber.isNotBlank()) cardNumber.takeLast(4) else existingLast4
+                            val brand = if (cardNumber.isNotBlank()) brandFromNumber(cardNumber) else null
+                            PaymentMethod(
+                                id = editingId.orEmpty(),
+                                type = PaymentMethodType.CREDIT_CARD,
+                                cardLast4 = last4,
+                                cardBrand = brand ?: viewModel.getById(editingId.orEmpty())?.cardBrand,
+                                cardholderName = cardName,
+                                cardExpiry = expiry,
+                            )
+                        }
+                        PaymentType.Pix -> PaymentMethod(
+                            id = editingId.orEmpty(),
+                            type = PaymentMethodType.PIX,
+                            pixKey = pixKey,
+                        )
+                        PaymentType.Boleto -> PaymentMethod(
+                            id = editingId.orEmpty(),
+                            type = PaymentMethodType.BOLETO,
+                        )
+                    }
+
+                    if (isEditing) {
+                        viewModel.update(method, makeDefault = saveAsDefault)
+                    } else {
+                        viewModel.add(method, makeDefault = saveAsDefault)
+                    }
+                    scope.launch {
+                        snackbarHost.showSnackbar(
+                            if (isEditing) "Método atualizado" else "Método de pagamento adicionado",
+                        )
+                    }
+                    onBack()
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -388,39 +479,3 @@ private fun DefaultCheckbox(value: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
-private val CardNumberTransformation = VisualTransformation { text ->
-    val digits = text.text
-    val formatted = buildString {
-        digits.forEachIndexed { i, c ->
-            if (i > 0 && i % 4 == 0) append(' ')
-            append(c)
-        }
-    }
-    val mapping = object : OffsetMapping {
-        override fun originalToTransformed(offset: Int): Int {
-            val spaces = (offset / 4).coerceAtMost(3)
-            return (offset + spaces).coerceAtMost(formatted.length)
-        }
-        override fun transformedToOriginal(offset: Int): Int {
-            val spaces = (offset / 5).coerceAtMost(3)
-            return (offset - spaces).coerceAtLeast(0)
-        }
-    }
-    TransformedText(AnnotatedString(formatted), mapping)
-}
-
-private val ExpiryTransformation = VisualTransformation { text ->
-    val digits = text.text
-    val formatted = if (digits.length >= 3) {
-        digits.substring(0, 2) + "/" + digits.substring(2)
-    } else {
-        digits
-    }
-    val mapping = object : OffsetMapping {
-        override fun originalToTransformed(offset: Int): Int =
-            if (offset <= 2) offset else (offset + 1).coerceAtMost(formatted.length)
-        override fun transformedToOriginal(offset: Int): Int =
-            if (offset <= 2) offset else (offset - 1).coerceAtLeast(0)
-    }
-    TransformedText(AnnotatedString(formatted), mapping)
-}
