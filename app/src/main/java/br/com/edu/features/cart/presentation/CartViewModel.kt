@@ -47,6 +47,15 @@ class CartViewModel(
         _state.value = CartUiState.Ready(repository.removeItem(productId, quantity = null))
     }
 
+    fun clear() = runOp {
+        val current = (_state.value as? CartUiState.Ready)?.cart ?: repository.getCart()
+        var cart = current
+        current.items.forEach { item ->
+            cart = repository.removeItem(item.productId, quantity = null)
+        }
+        _state.value = CartUiState.Ready(cart)
+    }
+
     private fun runOp(block: suspend () -> Unit) {
         viewModelScope.launch {
             mutex.withLock {

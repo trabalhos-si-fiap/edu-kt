@@ -33,4 +33,7 @@ private fun CartItemDto.toDomain() = CartItem(
     price = price,
     quantity = quantity,
     subtotal = subtotal,
+    imageUrl = imageUrl,
+    ratingAvg = ratingAvg,
+    ratingCount = ratingCount,
 )

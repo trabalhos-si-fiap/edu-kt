@@ -8,6 +8,9 @@ data class CartItem(
     val price: String,
     val quantity: Int,
     val subtotal: String,
+    val imageUrl: String,
+    val ratingAvg: Double,
+    val ratingCount: Int,
 )
 
 data class Cart(

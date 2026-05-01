@@ -12,6 +12,9 @@ data class CartItemDto(
     val price: String,
     val quantity: Int,
     val subtotal: String,
+    @SerialName("image_url") val imageUrl: String = "",
+    @SerialName("rating_avg") val ratingAvg: Double = 0.0,
+    @SerialName("rating_count") val ratingCount: Int = 0,
 )
 
 @Serializable
