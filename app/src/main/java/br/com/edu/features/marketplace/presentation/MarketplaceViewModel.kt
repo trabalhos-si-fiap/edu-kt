@@ -39,6 +39,12 @@ class MarketplaceViewModel(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    private val _selectedType = MutableStateFlow<String?>(null)
+    val selectedType: StateFlow<String?> = _selectedType.asStateFlow()
+
+    private val _categories = MutableStateFlow<List<String>>(emptyList())
+    val categories: StateFlow<List<String>> = _categories.asStateFlow()
+
     private val _reviews = MutableStateFlow<ReviewsUiState>(ReviewsUiState.Hidden)
     val reviews: StateFlow<ReviewsUiState> = _reviews.asStateFlow()
 
@@ -48,10 +54,22 @@ class MarketplaceViewModel(
             .distinctUntilChanged()
             .onEach { load(it) }
             .launchIn(viewModelScope)
+        loadCategories()
+    }
+
+    fun loadCategories() {
+        viewModelScope.launch {
+            runCatching { repository.listCategories() }
+                .onSuccess { _categories.value = it }
+        }
     }
 
     fun onQueryChange(value: String) {
         _query.value = value
+    }
+
+    fun onTypeSelected(type: String?) {
+        _selectedType.value = type
     }
 
     fun retry() {
@@ -60,6 +78,7 @@ class MarketplaceViewModel(
 
     fun load(query: String = _query.value) {
         _state.value = MarketplaceUiState.Loading
+        _selectedType.value = null
         viewModelScope.launch {
             _state.value = runCatching { repository.listProducts(query = query) }
                 .fold(

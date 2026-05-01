@@ -23,7 +23,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,7 +38,6 @@ import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.DashboardCustomize
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.outlined.PersonOutline
@@ -44,7 +46,6 @@ import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,13 +53,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Alignment
@@ -70,6 +69,9 @@ import androidx.compose.ui.layout.ContentScale
 import coil.compose.SubcomposeAsyncImage
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,15 +96,19 @@ fun MarketplaceScreen(
     onOpenCart: () -> Unit,
     onOpenOrders: () -> Unit,
     onOpenProfile: () -> Unit = {},
+    onOpenSupport: () -> Unit = {},
     onBack: () -> Unit = {},
+    onOpenProductDetail: (Int) -> Unit = {},
     viewModel: MarketplaceViewModel = viewModel(),
     cartViewModel: CartViewModel = CartViewModel.get(),
 ) {
     val search by viewModel.query.collectAsState()
     val uiState by viewModel.state.collectAsState()
+    val selectedType by viewModel.selectedType.collectAsState()
     val cartBusy by cartViewModel.busy.collectAsState()
     val cartState by cartViewModel.state.collectAsState()
     val reviewsState by viewModel.reviews.collectAsState()
+    val availableTypes by viewModel.categories.collectAsState()
     val cartCount = (cartState as? CartUiState.Ready)?.cart?.totalQuantity ?: 0
 
     LaunchedEffect(Unit) {
@@ -123,20 +129,15 @@ fun MarketplaceScreen(
             .fillMaxSize()
             .background(EduGradients.Background),
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {},
-                navigationIcon = {
-                    IconButton(onClick = onOpenProfile) {
-                        Icon(Icons.Outlined.PersonOutline, null, tint = EduColors.TextPrimary)
-                    }
-                },
-                actions = {
-                    CartIconWithBadge(count = cartCount, onClick = onOpenCart)
-                    IconButton(onClick = onOpenOrders) {
-                        Icon(Icons.Outlined.NotificationsNone, null, tint = EduColors.TextPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
+            MarketplaceTopBar(
+                search = search,
+                onSearchChange = viewModel::onQueryChange,
+                selectedType = selectedType,
+                availableTypes = availableTypes,
+                onTypeSelected = viewModel::onTypeSelected,
+                cartCount = cartCount,
+                onOpenProfile = onOpenProfile,
+                onOpenCart = onOpenCart,
             )
         },
         bottomBar = {
@@ -145,7 +146,8 @@ fun MarketplaceScreen(
                 onTabSelected = { index ->
                     when (index) {
                         1 -> onOpenOrders()
-                        2 -> onOpenProfile()
+                        2 -> onOpenSupport()
+                        3 -> onOpenProfile()
                     }
                 },
             )
@@ -166,23 +168,6 @@ fun MarketplaceScreen(
                     style = MaterialTheme.typography.displayLarge,
                     color = EduColors.TextPrimary,
                 )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Surface(
-                    shape = RoundedCornerShape(32.dp),
-                    color = EduColors.White,
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    EduTextField(
-                        value = search,
-                        onValueChange = viewModel::onQueryChange,
-                        placeholder = "Search courses, guides, or materials...",
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Search, null, tint = EduColors.TextSecondary)
-                        },
-                    )
-                }
             }
             when (val state = uiState) {
                 is MarketplaceUiState.Loading -> item(span = { GridItemSpan(maxLineSpan) }) {
@@ -213,12 +198,14 @@ fun MarketplaceScreen(
                     }
                 }
                 is MarketplaceUiState.Ready -> {
-                    if (state.products.isEmpty()) {
+                    val filtered = if (selectedType == null) state.products
+                        else state.products.filter { it.type == selectedType }
+                    if (filtered.isEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             EmptySearchResult(query = search)
                         }
                     } else {
-                        items(state.products) { product ->
+                        items(filtered) { product ->
                             ProductCard(
                                 category = product.subtype.uppercase().ifBlank { product.type.uppercase() },
                                 title = product.name,
@@ -231,44 +218,10 @@ fun MarketplaceScreen(
                                 addEnabled = !cartBusy,
                                 onAddToCart = { cartViewModel.addItem(product.id) },
                                 onShowReviews = { viewModel.showReviews(product) },
+                                onClick = { onOpenProductDetail(product.id) },
                             )
                         }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CartIconWithBadge(count: Int, onClick: () -> Unit) {
-    Box(contentAlignment = Alignment.TopEnd) {
-        IconButton(onClick = onClick) {
-            Icon(Icons.Outlined.ShoppingCart, null, tint = EduColors.TextPrimary)
-        }
-        AnimatedContent(
-            targetState = count,
-            transitionSpec = {
-                (scaleIn(spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn())
-                    .togetherWith(scaleOut(tween(120)) + fadeOut(tween(120)))
-            },
-            label = "cartBadge",
-            modifier = Modifier.offset(x = (-6).dp, y = 6.dp),
-        ) { value ->
-            if (value > 0) {
-                Box(
-                    Modifier
-                        .size(18.dp)
-                        .background(EduColors.Purple, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (value > 99) "99+" else value.toString(),
-                        color = EduColors.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
                 }
             }
         }
@@ -329,9 +282,12 @@ private fun ProductCard(
     addEnabled: Boolean,
     onAddToCart: () -> Unit,
     onShowReviews: () -> Unit,
+    onClick: () -> Unit,
 ) {
     EduCard(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         contentPadding = PaddingValues(12.dp),
         radius = 16.dp,
         shadow = 3.dp,
@@ -418,62 +374,3 @@ private fun ProductCard(
     }
 }
 
-@Composable
-private fun AddToCartButton(
-    enabled: Boolean,
-    onAddToCart: () -> Unit,
-) {
-    var added by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (added) 1.06f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "addToCartScale",
-    )
-
-    LaunchedEffect(added) {
-        if (added) {
-            delay(1200)
-            added = false
-        }
-    }
-
-    Button(
-        onClick = {
-            if (enabled && !added) {
-                added = true
-                onAddToCart()
-            }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale),
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (added) EduColors.GreenSoft else EduColors.InputFill,
-            contentColor = if (added) EduColors.GreenDark else EduColors.TextPrimary,
-        ),
-    ) {
-        AnimatedContent(
-            targetState = added,
-            transitionSpec = {
-                (scaleIn(animationSpec = tween(180), initialScale = 0.6f) + fadeIn(tween(180)))
-                    .togetherWith(scaleOut(tween(180), targetScale = 0.6f) + fadeOut(tween(180)))
-            },
-            label = "addToCartLabel",
-        ) { isAdded ->
-            if (isAdded) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Outlined.Check,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    Text("Adicionado", fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Text("+ Carrinho", fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
