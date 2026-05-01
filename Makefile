@@ -19,9 +19,10 @@ export PATH := $(JAVA_HOME)/bin:$(ANDROID_HOME)/platform-tools:$(PATH)
 
 .DEFAULT_GOAL := help
 .PHONY: help setup configure-ip show-ip doctor dev \
-        build compile release clean lint install launch run stop uninstall logs \
+        build compile release clean lint test install launch run stop uninstall logs \
         devices avds emulator wrapper \
-        backend-up backend-down backend-restart backend-logs backend-shell seed
+        backend-up backend-down backend-restart backend-logs backend-shell seed \
+        backend-test backend-lint backend-format
 
 # ---- Ajuda -----------------------------------------------------------------
 help: ## Lista todos os alvos
@@ -80,6 +81,9 @@ clean: ## Limpa artefatos de build
 lint: ## Roda Android Lint no debug
 	$(GRADLE) lintDebug
 
+test: ## Roda os testes unitários do app (JVM)
+	$(GRADLE) testDebugUnitTest
+
 # ---- Instalação e execução -------------------------------------------------
 install: ## Instala o APK debug no dispositivo/emulador conectado
 	$(GRADLE) installDebug
@@ -118,6 +122,15 @@ backend-shell: ## Abre shell no container da API
 seed: ## Reroda os management commands de seed (catálogo + admin)
 	$(COMPOSE) exec api uv run python manage.py seed_catalog
 	$(COMPOSE) exec api uv run python manage.py seed_admin
+
+backend-test: ## Roda pytest dentro do container da API (usa back-end/conftest.py)
+	$(COMPOSE) exec api uv run pytest
+
+backend-lint: ## Roda ruff check no código do backend
+	$(COMPOSE) exec api uv run ruff check .
+
+backend-format: ## Aplica ruff format no código do backend
+	$(COMPOSE) exec api uv run ruff format .
 
 # ---- Emulador / dispositivos ----------------------------------------------
 devices: ## Lista dispositivos/emuladores conectados

@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "BASE_URL", "\"http://10.166.234.1:8000/api/\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.196.34.119:8000/api/\"")
     }
 
     buildTypes {

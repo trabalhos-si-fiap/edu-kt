@@ -3,7 +3,7 @@
 
 Detects the local LAN IP (or accepts one via --ip) and rewrites the
 `BASE_URL` buildConfigField in app/build.gradle.kts so the Kotlin app
-points to the FastAPI/Django backend running on this machine.
+points to the Django backend running on this machine.
 
 Usage:
     python scripts/configure_ip.py                 # auto-detect
