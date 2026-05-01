@@ -35,7 +35,10 @@ class MainActivity : ComponentActivity() {
 private fun EduApp() {
     val nav = rememberNavController()
     val marketplaceVm: MarketplaceViewModel = viewModel()
-    NavHost(navController = nav, startDestination = "login") {
+    val hasSession = EduApplication.tokenStore.currentRefresh() != null ||
+        EduApplication.tokenStore.currentAccess() != null
+    val startDestination = if (hasSession) "marketplace" else "login"
+    NavHost(navController = nav, startDestination = startDestination) {
         composable("login") {
             LoginScreen(
                 onLoginSuccess = {

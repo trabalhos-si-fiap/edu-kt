@@ -2,7 +2,7 @@ package br.com.edu.features.profile.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import br.com.edu.core.auth.TokenStore
+import br.com.edu.features.auth.data.AuthRepository
 import br.com.edu.features.profile.data.AddressRepository
 import br.com.edu.features.profile.data.UserRepository
 import br.com.edu.features.profile.data.remote.AddressInDto
@@ -34,6 +34,7 @@ sealed interface ProfileUiState {
 class ProfileViewModel(
     private val userRepository: UserRepository = UserRepository(),
     private val addressRepository: AddressRepository = AddressRepository(),
+    private val authRepository: AuthRepository = AuthRepository(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<ProfileUiState>(ProfileUiState.Loading)
@@ -143,7 +144,9 @@ class ProfileViewModel(
     }
 
     fun logout(onDone: () -> Unit) {
-        TokenStore.clear()
-        onDone()
+        viewModelScope.launch {
+            authRepository.logout()
+            onDone()
+        }
     }
 }

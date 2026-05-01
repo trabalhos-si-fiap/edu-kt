@@ -15,7 +15,20 @@ data class RegisterRequest(
 )
 
 @Serializable
-data class TokenResponse(val token: String, val email: String)
+data class TokenPairResponse(
+    val access: String,
+    val refresh: String,
+    val email: String,
+)
+
+@Serializable
+data class RefreshRequest(val refresh: String)
+
+@Serializable
+data class RefreshResponse(val access: String, val refresh: String)
+
+@Serializable
+data class LogoutRequest(val refresh: String)
 
 @Serializable
 data class ErrorResponse(val detail: String? = null)

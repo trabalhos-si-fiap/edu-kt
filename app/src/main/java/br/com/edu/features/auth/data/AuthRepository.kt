@@ -1,11 +1,13 @@
 package br.com.edu.features.auth.data
 
-import br.com.edu.core.auth.TokenStore
+import br.com.edu.EduApplication
 import br.com.edu.core.network.ApiClient
 import br.com.edu.features.auth.data.remote.AuthApi
 import br.com.edu.features.auth.data.remote.ErrorResponse
 import br.com.edu.features.auth.data.remote.LoginRequest
+import br.com.edu.features.auth.data.remote.LogoutRequest
 import br.com.edu.features.auth.data.remote.RegisterRequest
+import br.com.edu.features.auth.data.remote.TokenPairResponse
 import kotlinx.serialization.json.Json
 import retrofit2.Response
 
@@ -16,7 +18,7 @@ class AuthRepository(
 
     suspend fun login(email: String, password: String): Result<String> = runCatching {
         val response = api.login(LoginRequest(email = email.trim(), password = password))
-        handleToken(response)
+        handleTokenPair(response)
     }
 
     suspend fun register(
@@ -35,10 +37,18 @@ class AuthRepository(
                 birth_date = birthDate,
             ),
         )
-        handleToken(response)
+        handleTokenPair(response)
     }
 
-    private fun handleToken(response: Response<br.com.edu.features.auth.data.remote.TokenResponse>): String {
+    suspend fun logout(): Result<Unit> = runCatching {
+        val refresh = EduApplication.tokenStore.currentRefresh()
+        if (!refresh.isNullOrBlank()) {
+            runCatching { api.logout(LogoutRequest(refresh = refresh)) }
+        }
+        EduApplication.tokenStore.clear()
+    }
+
+    private fun handleTokenPair(response: Response<TokenPairResponse>): String {
         if (!response.isSuccessful) {
             val raw = response.errorBody()?.string().orEmpty()
             val message = runCatching { json.decodeFromString<ErrorResponse>(raw).detail }
@@ -47,7 +57,7 @@ class AuthRepository(
             throw IllegalStateException(message)
         }
         val body = response.body() ?: throw IllegalStateException("Resposta vazia do servidor")
-        TokenStore.set(body.token)
+        EduApplication.tokenStore.setPair(body.access, body.refresh)
         return body.email
     }
 }
