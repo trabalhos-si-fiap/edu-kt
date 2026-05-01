@@ -1,11 +1,32 @@
+import logging
 import os
+from datetime import timedelta
 from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-insecure-change-me")
+INSECURE_DEV_SECRET_KEY = "INSECURE-askldiqj"
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = ["*"]
+
+_secret_key_env = os.getenv("DJANGO_SECRET_KEY")
+if _secret_key_env:
+    SECRET_KEY = _secret_key_env
+else:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY is required when DEBUG=False. "
+            "Set it in the environment before starting the server."
+        )
+    SECRET_KEY = INSECURE_DEV_SECRET_KEY
+    logging.getLogger(__name__).warning(
+        "DJANGO_SECRET_KEY is not set; falling back to the INSECURE development "
+        "key %r. Define DJANGO_SECRET_KEY in your .env before deploying anywhere.",
+        INSECURE_DEV_SECRET_KEY,
+    )
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",") if h.strip()]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -16,6 +37,8 @@ INSTALLED_APPS = [
     "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
     "corsheaders",
+    "ninja_jwt",
+    "ninja_jwt.token_blacklist",
     "apps.accounts",
     "apps.catalog",
     "apps.cart",
@@ -83,3 +106,15 @@ TIME_ZONE = "UTC"
 LANGUAGE_CODE = "en-us"
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+NINJA_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
