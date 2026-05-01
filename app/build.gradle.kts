@@ -16,7 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "BASE_URL", "\"http://10.196.34.119:8000/api/\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.108.65.151:8000/api/\"")
     }
 
     buildTypes {
@@ -56,6 +56,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.datastore.preferences)
     debugImplementation(libs.androidx.ui.tooling)
     testImplementation(libs.junit)
 }
