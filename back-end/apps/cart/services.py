@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import F
+from django.db.models import Avg, Count, F
 
 from apps.cart.models import Cart, CartItem
 from apps.catalog.models import Product
@@ -51,7 +51,11 @@ def remove_item(user, product_id: int, quantity: int | None = None) -> Cart:
 def serialize_cart(cart: Cart) -> dict:
     items = []
     total = Decimal("0")
-    for it in cart.items.select_related("product").all():
+    cart_items = cart.items.select_related("product").annotate(
+        product_rating_avg=Avg("product__reviews__rating"),
+        product_rating_count=Count("product__reviews"),
+    )
+    for it in cart_items:
         subtotal = it.product.price * it.quantity
         total += subtotal
         items.append(
@@ -63,6 +67,9 @@ def serialize_cart(cart: Cart) -> dict:
                 "price": it.product.price,
                 "quantity": it.quantity,
                 "subtotal": subtotal,
+                "image_url": it.product.image_url,
+                "rating_avg": round(float(it.product_rating_avg or 0.0), 2),
+                "rating_count": int(it.product_rating_count or 0),
             }
         )
     return {"items": items, "total": total}

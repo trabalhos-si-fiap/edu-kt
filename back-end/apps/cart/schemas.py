@@ -16,6 +16,9 @@ class CartItemOut(Schema):
     price: Decimal
     quantity: int
     subtotal: Decimal
+    image_url: str = ""
+    rating_avg: float = 0.0
+    rating_count: int = 0
 
 
 class CartOut(Schema):
