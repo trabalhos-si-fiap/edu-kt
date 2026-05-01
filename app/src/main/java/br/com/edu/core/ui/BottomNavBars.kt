@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.outlined.SupportAgent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -106,6 +107,7 @@ private val authItems = listOf(
 
 private val mainItems = listOf(
     NavItem("Loja", Icons.Outlined.Storefront),
-    NavItem("Meus Pedidos", Icons.Outlined.ReceiptLong),
+    NavItem("Pedidos", Icons.Outlined.ReceiptLong),
+    NavItem("Suporte", Icons.Outlined.SupportAgent),
     NavItem("Perfil", Icons.Outlined.PersonOutline),
 )
