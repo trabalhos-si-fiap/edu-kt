@@ -40,6 +40,17 @@ data class ReviewInDto(
 )
 
 @Serializable
+data class CategoryDto(
+    val type: String,
+    val count: Int,
+)
+
+@Serializable
+data class CategoryListDto(
+    val items: List<CategoryDto>,
+)
+
+@Serializable
 data class ReviewListDto(
     val items: List<ReviewDto>,
     val total: Int,

@@ -10,6 +10,11 @@ import br.com.edu.features.marketplace.domain.Review
 class MarketplaceRepository(
     private val api: ProductApi = ApiClient.create(),
 ) {
+    suspend fun listCategories(): List<String> = api.categories()
+        .items
+        .map { it.type }
+        .filter { it.isNotBlank() }
+
     suspend fun listProducts(
         query: String? = null,
         limit: Int? = null,
@@ -17,6 +22,8 @@ class MarketplaceRepository(
     ): List<Product> = api.list(q = query?.takeIf { it.isNotBlank() }, limit = limit, offset = offset)
         .items
         .map { it.toDomain() }
+
+    suspend fun getProduct(productId: Int): Product = api.get(productId).toDomain()
 
     suspend fun listReviews(
         productId: Int,

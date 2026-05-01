@@ -14,6 +14,12 @@ interface ProductApi {
         @Query("offset") offset: Int? = null,
     ): ProductListDto
 
+    @GET("products/categories")
+    suspend fun categories(): CategoryListDto
+
+    @GET("products/{id}")
+    suspend fun get(@Path("id") productId: Int): ProductDto
+
     @GET("products/{id}/reviews")
     suspend fun reviews(
         @Path("id") productId: Int,
