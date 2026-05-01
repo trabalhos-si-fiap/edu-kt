@@ -12,7 +12,7 @@ Centralizador da documentação técnica do app. Para instalação e build, ver 
 | [Navegação](navigation.md) | Rotas, mapa de transições, deep links |
 | [Persistência local](persistence.md) | O que faz sentido salvar no dispositivo e como |
 | [Integração com back-end](backend-integration.md) | Fronteira device × servidor (Spring Boot) |
-| [Hot reload e dev workflow](dev-workflow.md) | Live Edit, Compose Preview, Makefile |
+| [Hot reload e dev workflow](dev-workflow.md) | Live Edit, Compose Preview, Makefile, testes unitários |
 | [Créditos](credits.md) | Equipe e ano |
 
 ## Convenções deste diretório

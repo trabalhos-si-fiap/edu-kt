@@ -61,7 +61,7 @@ back-end/
 ├── config/                     # Django project (settings, urls, asgi, NinjaAPI)
 ├── apps/
 │   ├── accounts/               # User + Token bearer auth
-│   ├── catalog/                # Product + Review + GET /products, /products/{id}/reviews
+│   ├── catalog/                # Product + Review + GET /products, /products/{id}, /products/{id}/reviews
 │   │   └── management/commands/seed_catalog.py
 │   ├── cart/                   # Cart, CartItem, services, /cart endpoints
 │   └── orders/                 # Order atomic creation, /orders endpoints
@@ -77,6 +77,8 @@ back-end/
 | POST | `/api/auth/register` | — | `{email, password, name?}` → `{token, email}` |
 | POST | `/api/auth/login` | — | `{email, password}` → `{token, email}` |
 | GET | `/api/products` | — | Lista catálogo paginado. Query params: `q` (busca em `name`/`description`/`type`/`subtype`, `icontains`), `limit` (1–100, default 20), `offset` (≥0, default 0). Resposta: `{items: [...], total, limit, offset}`. Cada item inclui `rating_avg` (float 0–5) e `rating_count` (int) agregados via `Avg/Count` em `reviews`. |
+| GET | `/api/products/{id}` | — | Detalhe de um produto com `rating_avg`/`rating_count` agregados. Mesmo shape do item de `/api/products`. 404 se não existir. Usado pela `ProductDetailScreen` no app, que precisa abrir produtos por id sem depender da página atual da listagem. |
+| GET | `/api/products/categories` | — | Tipos distintos do catálogo (apenas `type` não vazio) com `count` por tipo, ordenados alfabeticamente. Resposta: `{items: [{type, count}]}`. |
 | GET | `/api/products/{id}/reviews` | — | Avaliações do produto, ordenadas por `created_at desc`. Query params: `limit` (1–100, default 20), `offset` (≥0, default 0). Resposta: `{items: [{id, author, rating, comment, created_at}], total, rating_avg, rating_count}`. 404 se produto não existir. |
 | POST | `/api/products/{id}/reviews` | bearer | `{rating: 1..5, comment?}` cria nova `Review`. Autor preenchido com `user.get_full_name()` ou `user.email` (truncado em 120 chars; "Anônimo" como fallback). 400 se `rating` fora de 1–5; 404 se produto não existir. |
 | GET | `/api/cart` | bearer | Itens (`product_id, name, type, subtype, price, quantity, subtotal`) + total |

@@ -54,7 +54,7 @@ Família única: **Lexend Deca** via `androidx.compose.ui:ui-text-google-fonts` 
 | `EduTextField` | TextField com fill `InputFill`, raio 24, sem borda padrão, foco roxo. Suporta `leadingIcon`, `trailingIcon`, `enabled`, `readOnly`, `visualTransformation`. |
 | `EduPrimaryButton` | Botão full-width, bg `Primary`, raio 12, altura mínima 52. |
 | `EduPurpleButton` | Botão de destaque (CTA), bg `Purple`, raio 12. |
-| `EduSoftButton` | Botão secundário leve, full-width, bg/fg parametrizáveis. |
+| `EduSoftButton` | Botão secundário leve, full-width, bg/fg parametrizáveis. Altura mínima 48.dp; texto centralizado e respeita `\n` para quebrar em múltiplas linhas. |
 | `EduCard` | `Surface` com sombra suave, raio 24, padding interno parametrizável. |
 | `DottedBorderBox` | Borda tracejada (`Modifier.drawBehind` + `PathEffect`). Usada no "Outro método" do Checkout. |
 | `AuthBottomBar` | Barra inferior de 2 itens (Entrar / Cadastro). |

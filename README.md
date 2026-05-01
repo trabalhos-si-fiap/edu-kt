@@ -62,6 +62,8 @@ edu-kt/
                             CheckoutScreen, OrdersScreen}.kt
 ```
 
+> **Usando Windows 10/11?** Veja o guia dedicado em [`docs/windows-setup.md`](docs/windows-setup.md) — os comandos abaixo assumem Linux/macOS.
+
 ## Pré-requisitos
 
 | Ferramenta | Versão | Como obter |
@@ -122,14 +124,21 @@ make backend-restart # reinicia só a API (mantém o DB)
 make backend-logs    # logs do container da API
 make backend-shell   # shell dentro do container
 make seed            # reroda seed_catalog + seed_admin
+make backend-test    # pytest dentro do container
+make backend-lint    # ruff check
+make backend-format  # ruff format
 
 # Frontend (Android)
 make emulator        # sobe AVD em background (AVD=nome para escolher)
 make run             # build + install + launch
+make test            # roda os testes unitários (JVM)
+make lint            # Android Lint no debug
 make logs            # logcat filtrado pelo PID do app
 make stop            # force-stop
 make clean           # limpa artefatos
 ```
+
+Detalhes de testes (filtros, relatórios, escopo) em [docs/dev-workflow.md](docs/dev-workflow.md#testes-unitários).
 
 `make` exporta `JAVA_HOME` (Temurin 21 do asdf) e `ANDROID_HOME` (`~/Android/Sdk`) automaticamente — sobrescreva passando `JAVA_HOME=... make run` se precisar.
 

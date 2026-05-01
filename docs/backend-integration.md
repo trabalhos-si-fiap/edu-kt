@@ -12,6 +12,7 @@ Estado atual da integração entre o app Android e o backend Django, e as diretr
 | Cadastro | `POST /api/auth/register` | ✅ Tela `RegisterScreen` valida localmente e cria conta no backend; persiste `name`/`phone`/`birth_date` (nome é dividido em `first_name` + `last_name`) |
 | Perfil | `GET /api/auth/me`, `PATCH /api/auth/me` | ✅ `ProfileScreen` carrega e edita nome/telefone/data de nascimento; ambas exigem `Authorization: Bearer <key>`. `birth_date` em ISO `YYYY-MM-DD` (string vazia limpa o campo); formato inválido retorna 400 |
 | Catálogo | `GET /api/products` | ✅ `MarketplaceScreen` lista produtos reais com imagem (Coil), com busca server-side (`?q=`) e paginação (`?limit=&offset=`); resposta `{items, total, limit, offset}` inclui `rating_avg` (0–5) e `rating_count` por produto. Campo de busca debounce 300ms no `MarketplaceViewModel`. |
+| Detalhe do produto | `GET /api/products/{id}` | ✅ `ProductDetailScreen` busca o produto por id direto no backend (não filtra a listagem paginada — antes falhava com "Produto não encontrado" para qualquer item além do limite default de 20). Resposta com `rating_avg`/`rating_count` agregados. |
 | Avaliações | `GET /api/products/{id}/reviews` | ✅ `ReviewsBottomSheet` abre ao tocar nas estrelas do card; resposta `{items, total, rating_avg, rating_count}` com `author/rating/comment/created_at`. Paginação `?limit=&offset=`. |
 | Carrinho | `/api/cart/*` | ✅ `CartViewModel` singleton sincroniza add/remove com o backend; `CheckoutScreen` lê do servidor |
 | Pedidos | `POST /api/orders`, `GET /api/orders`, `POST /api/orders/{id}/rebuy` | ✅ `CheckoutScreen` cria o pedido (esvazia o carrinho server-side) e `OrdersScreen` lista. Cada item vem com `image_url`, `rating_avg`, `rating_count` para o carrossel. "Comprar novamente" chama `rebuy` (incrementa carrinho). |
@@ -122,7 +123,7 @@ features/marketplace/
 ├── data/
 │   ├── MarketplaceRepository.kt   # DTO → domínio (produtos + reviews)
 │   └── remote/
-│       ├── ProductApi.kt          # GET /products, GET/POST /products/{id}/reviews
+│       ├── ProductApi.kt          # GET /products, GET /products/{id}, GET/POST /products/{id}/reviews
 │       └── ProductDto.kt          # ProductDto / ReviewDto / ReviewInDto + envelopes paginados
 ├── domain/
 │   └── Product.kt                 # Product (com ratingAvg/ratingCount) + Review
