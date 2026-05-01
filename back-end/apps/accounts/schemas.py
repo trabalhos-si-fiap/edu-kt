@@ -15,9 +15,23 @@ class LoginIn(Schema):
     password: str
 
 
-class TokenOut(Schema):
-    token: str
+class TokenPairOut(Schema):
+    access: str
+    refresh: str
     email: str
+
+
+class RefreshIn(Schema):
+    refresh: str
+
+
+class RefreshOut(Schema):
+    access: str
+    refresh: str
+
+
+class LogoutIn(Schema):
+    refresh: str
 
 
 class UserOut(Schema):

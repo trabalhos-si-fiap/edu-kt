@@ -2,17 +2,22 @@ from datetime import date
 
 from django.contrib.auth import authenticate
 from django.db import IntegrityError, transaction
-from ninja import Router
+from ninja import Router, Status
+from ninja_jwt.exceptions import TokenError
+from ninja_jwt.tokens import RefreshToken
 
-from apps.accounts.auth import bearer_auth
-from apps.accounts.models import Address, Token, User
+from apps.accounts.auth import jwt_auth
+from apps.accounts.models import Address, User
 from apps.accounts.schemas import (
     AddressIn,
     AddressOut,
     AddressPatchIn,
     LoginIn,
+    LogoutIn,
+    RefreshIn,
+    RefreshOut,
     RegisterIn,
-    TokenOut,
+    TokenPairOut,
     UserOut,
     UserPatchIn,
 )
@@ -52,12 +57,21 @@ def _serialize_user(user: User) -> dict:
     }
 
 
-@router.post("/register", response={201: TokenOut, 400: dict})
+def _issue_pair(user: User) -> dict:
+    refresh = RefreshToken.for_user(user)
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+        "email": user.email,
+    }
+
+
+@router.post("/register", response={201: TokenPairOut, 400: dict})
 def register(request, payload: RegisterIn):
     try:
         birth_date = _parse_birth_date(payload.birth_date)
     except ValueError as exc:
-        return 400, {"detail": str(exc)}
+        return Status(400, {"detail": str(exc)})
 
     first, last = _split_name(payload.name)
     try:
@@ -69,31 +83,56 @@ def register(request, payload: RegisterIn):
             last_name=last,
         )
     except IntegrityError:
-        return 400, {"detail": "Email already registered"}
+        return Status(400, {"detail": "Email already registered"})
 
     user.phone = (payload.phone or "")[:32]
     user.birth_date = birth_date
     user.save(update_fields=["phone", "birth_date"])
 
-    token = Token.objects.create(user=user)
-    return 201, {"token": str(token.key), "email": user.email}
+    return Status(201, _issue_pair(user))
 
 
-@router.post("/login", response={200: TokenOut, 401: dict})
+@router.post("/login", response={200: TokenPairOut, 401: dict})
 def login(request, payload: LoginIn):
     user = authenticate(request, username=payload.email, password=payload.password)
     if user is None:
-        return 401, {"detail": "Invalid credentials"}
-    token = Token.objects.create(user=user)
-    return 200, {"token": str(token.key), "email": user.email}
+        return Status(401, {"detail": "Invalid credentials"})
+    return Status(200, _issue_pair(user))
 
 
-@router.get("/me", auth=bearer_auth, response=UserOut)
+@router.post("/refresh", response={200: RefreshOut, 401: dict})
+def refresh(request, payload: RefreshIn):
+    try:
+        old = RefreshToken(payload.refresh)
+    except TokenError as exc:
+        return Status(401, {"detail": str(exc)})
+
+    user_id = old.get("user_id")
+    try:
+        user = User.objects.get(pk=user_id, is_active=True)
+    except User.DoesNotExist:
+        return Status(401, {"detail": "User not found"})
+
+    old.blacklist()
+    new_pair = RefreshToken.for_user(user)
+    return Status(200, {"access": str(new_pair.access_token), "refresh": str(new_pair)})
+
+
+@router.post("/logout", auth=jwt_auth, response={204: None, 401: dict})
+def logout(request, payload: LogoutIn):
+    try:
+        RefreshToken(payload.refresh).blacklist()
+    except TokenError as exc:
+        return Status(401, {"detail": str(exc)})
+    return Status(204, None)
+
+
+@router.get("/me", auth=jwt_auth, response=UserOut)
 def me(request):
     return _serialize_user(request.auth)
 
 
-@router.patch("/me", auth=bearer_auth, response={200: UserOut, 400: dict})
+@router.patch("/me", auth=jwt_auth, response={200: UserOut, 400: dict})
 def update_me(request, payload: UserPatchIn):
     user: User = request.auth
     update_fields: list[str] = []
@@ -112,13 +151,13 @@ def update_me(request, payload: UserPatchIn):
         try:
             user.birth_date = _parse_birth_date(payload.birth_date)
         except ValueError as exc:
-            return 400, {"detail": str(exc)}
+            return Status(400, {"detail": str(exc)})
         update_fields.append("birth_date")
 
     if update_fields:
         user.save(update_fields=update_fields)
 
-    return 200, _serialize_user(user)
+    return Status(200, _serialize_user(user))
 
 
 def _serialize_address(address: Address) -> dict:
@@ -143,30 +182,30 @@ def _clear_other_favorites(user: User, exclude_id: int | None = None) -> None:
     qs.update(is_favorite=False)
 
 
-@router.get("/addresses", auth=bearer_auth, response=list[AddressOut])
+@router.get("/addresses", auth=jwt_auth, response=list[AddressOut])
 def list_addresses(request):
     user: User = request.auth
     return [_serialize_address(a) for a in user.addresses.all()]
 
 
-@router.post("/addresses", auth=bearer_auth, response={201: AddressOut})
+@router.post("/addresses", auth=jwt_auth, response={201: AddressOut})
 def create_address(request, payload: AddressIn):
     user: User = request.auth
     with transaction.atomic():
         if payload.is_favorite:
             _clear_other_favorites(user)
         address = Address.objects.create(user=user, **payload.dict())
-    return 201, _serialize_address(address)
+    return Status(201, _serialize_address(address))
 
 
-@router.patch("/addresses/{address_id}", auth=bearer_auth, response={200: AddressOut, 404: dict})
+@router.patch("/addresses/{address_id}", auth=jwt_auth, response={200: AddressOut, 404: dict})
 def update_address(request, address_id: int, payload: AddressPatchIn):
     user: User = request.auth
     with transaction.atomic():
         try:
             address = Address.objects.select_for_update().get(id=address_id, user=user)
         except Address.DoesNotExist:
-            return 404, {"detail": "Address not found"}
+            return Status(404, {"detail": "Address not found"})
 
         data = payload.dict(exclude_unset=True)
         if data.get("is_favorite") is True:
@@ -176,13 +215,13 @@ def update_address(request, address_id: int, payload: AddressPatchIn):
             setattr(address, field, value)
         address.save()
 
-    return 200, _serialize_address(address)
+    return Status(200, _serialize_address(address))
 
 
-@router.delete("/addresses/{address_id}", auth=bearer_auth, response={204: None, 404: dict})
+@router.delete("/addresses/{address_id}", auth=jwt_auth, response={204: None, 404: dict})
 def delete_address(request, address_id: int):
     user: User = request.auth
     deleted, _ = Address.objects.filter(id=address_id, user=user).delete()
     if not deleted:
-        return 404, {"detail": "Address not found"}
-    return 204, None
+        return Status(404, {"detail": "Address not found"})
+    return Status(204, None)

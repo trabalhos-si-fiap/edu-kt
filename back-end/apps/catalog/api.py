@@ -1,8 +1,8 @@
 from django.db.models import Avg, Count, Q
 from django.shortcuts import get_object_or_404
-from ninja import Query, Router
+from ninja import Query, Router, Status
 
-from apps.accounts.auth import bearer_auth
+from apps.accounts.auth import jwt_auth
 from apps.catalog.models import Product, Review
 from apps.catalog.schemas import (
     CategoryListOut,
@@ -70,10 +70,7 @@ def list_products(
 @router.get("/categories", response=CategoryListOut)
 def list_categories(request):
     rows = (
-        Product.objects.exclude(type="")
-        .values("type")
-        .annotate(count=Count("id"))
-        .order_by("type")
+        Product.objects.exclude(type="").values("type").annotate(count=Count("id")).order_by("type")
     )
     return {"items": [{"type": r["type"], "count": r["count"]} for r in rows]}
 
@@ -106,12 +103,12 @@ def list_product_reviews(
 
 @router.post(
     "/{product_id}/reviews",
-    auth=bearer_auth,
+    auth=jwt_auth,
     response={201: ReviewOut, 400: dict, 404: dict},
 )
 def create_product_review(request, product_id: int, payload: ReviewIn):
     if payload.rating < 1 or payload.rating > 5:
-        return 400, {"detail": "rating must be between 1 and 5"}
+        return Status(400, {"detail": "rating must be between 1 and 5"})
     product = get_object_or_404(Product, pk=product_id)
     user = request.auth
     author = (user.get_full_name() or user.email or "").strip()[:120] or "Anônimo"
@@ -121,4 +118,4 @@ def create_product_review(request, product_id: int, payload: ReviewIn):
         rating=payload.rating,
         comment=(payload.comment or "")[:1000],
     )
-    return 201, review
+    return Status(201, review)

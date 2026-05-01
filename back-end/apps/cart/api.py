@@ -1,10 +1,10 @@
-from ninja import Router
+from ninja import Router, Status
 
-from apps.accounts.auth import bearer_auth
+from apps.accounts.auth import jwt_auth
 from apps.cart.schemas import CartItemIn, CartOut
 from apps.cart.services import add_item, get_or_create_cart, remove_item, serialize_cart
 
-router = Router(auth=bearer_auth)
+router = Router(auth=jwt_auth)
 
 
 @router.get("", response=CartOut)
@@ -18,10 +18,10 @@ def add_cart_item(request, payload: CartItemIn):
     try:
         cart = add_item(request.auth, payload.product_id, payload.quantity)
     except LookupError:
-        return 404, {"detail": "Product not found"}
+        return Status(404, {"detail": "Product not found"})
     except ValueError as e:
-        return 400, {"detail": str(e)}
-    return 200, serialize_cart(cart)
+        return Status(400, {"detail": str(e)})
+    return Status(200, serialize_cart(cart))
 
 
 @router.delete("/items/{product_id}", response={200: CartOut, 400: dict})
@@ -29,5 +29,5 @@ def remove_cart_item(request, product_id: int, quantity: int | None = None):
     try:
         cart = remove_item(request.auth, product_id, quantity)
     except ValueError as e:
-        return 400, {"detail": str(e)}
-    return 200, serialize_cart(cart)
+        return Status(400, {"detail": str(e)})
+    return Status(200, serialize_cart(cart))

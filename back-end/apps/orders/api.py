@@ -1,6 +1,6 @@
-from ninja import Router
+from ninja import Router, Status
 
-from apps.accounts.auth import bearer_auth
+from apps.accounts.auth import jwt_auth
 from apps.cart.services import serialize_cart
 from apps.orders.models import Order
 from apps.orders.schemas import OrderOut
@@ -11,7 +11,7 @@ from apps.orders.services import (
     serialize_order,
 )
 
-router = Router(auth=bearer_auth)
+router = Router(auth=jwt_auth)
 
 
 @router.post("", response={201: OrderOut, 400: dict})
@@ -19,8 +19,8 @@ def create_order(request):
     try:
         order = create_order_from_cart(request.auth)
     except EmptyCartError as e:
-        return 400, {"detail": str(e)}
-    return 201, serialize_order(order)
+        return Status(400, {"detail": str(e)})
+    return Status(201, serialize_order(order))
 
 
 @router.get("", response=list[OrderOut])
@@ -34,5 +34,5 @@ def rebuy(request, order_id: int):
     try:
         cart = rebuy_order(request.auth, order_id)
     except LookupError:
-        return 404, {"detail": "Order not found"}
-    return 200, serialize_cart(cart)
+        return Status(404, {"detail": "Order not found"})
+    return Status(200, serialize_cart(cart))
