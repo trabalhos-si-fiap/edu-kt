@@ -189,6 +189,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "123",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -202,6 +203,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "123",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -215,6 +217,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "1234",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -228,6 +231,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "",
+                taxId = "39053344705",
                 isEditing = true,
             ),
         )
@@ -242,6 +246,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "",
+                taxId = "39053344705",
                 isEditing = true,
             ),
         )
@@ -256,6 +261,7 @@ class CardFormattingTest {
                 cardName = "   ",
                 expiry = "1230",
                 cvv = "123",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -270,6 +276,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "12",
                 cvv = "123",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -284,6 +291,7 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "12",
+                taxId = "39053344705",
                 isEditing = false,
             ),
         )
@@ -297,7 +305,52 @@ class CardFormattingTest {
                 cardName = "JOHN DOE",
                 expiry = "1230",
                 cvv = "",
+                taxId = "39053344705",
                 isEditing = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `validate rejects invalid taxId when adding`() {
+        assertEquals(
+            CardFormError.InvalidTaxId,
+            validateCreditCardForm(
+                cardNumber = "4".repeat(16),
+                cardName = "JOHN DOE",
+                expiry = "1230",
+                cvv = "123",
+                taxId = "12345678900",
+                isEditing = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `validate rejects empty taxId when editing`() {
+        assertEquals(
+            CardFormError.InvalidTaxId,
+            validateCreditCardForm(
+                cardNumber = "",
+                cardName = "JOHN DOE",
+                expiry = "1230",
+                cvv = "",
+                taxId = "",
+                isEditing = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `validate accepts a valid CNPJ`() {
+        assertNull(
+            validateCreditCardForm(
+                cardNumber = "4".repeat(16),
+                cardName = "JOHN DOE",
+                expiry = "1230",
+                cvv = "123",
+                taxId = "11222333000181",
+                isEditing = false,
             ),
         )
     }
@@ -308,5 +361,121 @@ class CardFormattingTest {
         assertEquals("Informe o nome", CardFormError.MissingName.message())
         assertEquals("Validade inválida", CardFormError.InvalidExpiry.message())
         assertEquals("CVV inválido", CardFormError.InvalidCvv.message())
+        assertEquals("CPF/CNPJ inválido", CardFormError.InvalidTaxId.message())
+    }
+
+    // --- tax id sanitize / format ---
+
+    @Test
+    fun `sanitizeTaxId strips non-digits and caps at 14`() {
+        assertEquals("39053344705", sanitizeTaxId("390.533.447-05"))
+        assertEquals("11222333000181", sanitizeTaxId("11.222.333/0001-81"))
+        assertEquals("12345678901234", sanitizeTaxId("1234567890123456"))
+    }
+
+    @Test
+    fun `formatTaxId masks as CPF up to 11 digits and as CNPJ from 12 onwards`() {
+        assertEquals("", formatTaxId(""))
+        assertEquals("123", formatTaxId("123"))
+        assertEquals("123.456", formatTaxId("123456"))
+        assertEquals("123.456.789", formatTaxId("123456789"))
+        assertEquals("123.456.789-01", formatTaxId("12345678901"))
+        // 12 digits → CNPJ partial
+        assertEquals("12.345.678/9012", formatTaxId("123456789012"))
+        assertEquals("12.345.678/9012-34", formatTaxId("12345678901234"))
+    }
+
+    private fun assertTaxIdMappingInvariants(input: String) {
+        val tt = TaxIdTransformation.applyTo(input)
+        val mapping = tt.offsetMapping
+        val origLen = input.length
+        val transLen = tt.text.length
+        assertEquals(transLen, mapping.originalToTransformed(origLen))
+        assertEquals(origLen, mapping.transformedToOriginal(transLen))
+        for (off in 0..origLen) {
+            val t = mapping.originalToTransformed(off)
+            require(t in 0..transLen) { "originalToTransformed($off)=$t out of [0,$transLen] (len=$origLen)" }
+        }
+        for (off in 0..transLen) {
+            val o = mapping.transformedToOriginal(off)
+            require(o in 0..origLen) { "transformedToOriginal($off)=$o out of [0,$origLen] (len=$origLen)" }
+        }
+    }
+
+    @Test
+    fun `tax id mapping holds invariants for all valid lengths`() {
+        for (len in 0..MAX_TAX_ID_DIGITS) {
+            assertTaxIdMappingInvariants("1".repeat(len))
+        }
+    }
+
+    // --- CPF validators ---
+
+    @Test
+    fun `valid CPFs are accepted`() {
+        assertEquals(true, isValidCpf("39053344705"))
+        assertEquals(true, isValidCpf("11144477735"))
+    }
+
+    @Test
+    fun `CPFs with wrong check digits are rejected`() {
+        assertEquals(false, isValidCpf("39053344700"))
+        assertEquals(false, isValidCpf("11144477700"))
+    }
+
+    @Test
+    fun `CPFs with all repeated digits are rejected`() {
+        for (d in '0'..'9') assertEquals(false, isValidCpf(d.toString().repeat(11)))
+    }
+
+    @Test
+    fun `CPFs with wrong length are rejected`() {
+        assertEquals(false, isValidCpf(""))
+        assertEquals(false, isValidCpf("3905334470"))
+        assertEquals(false, isValidCpf("390533447055"))
+    }
+
+    @Test
+    fun `CPFs with non digits would not pass length check`() {
+        // sanitize strips non-digits before reaching validator, but defend the invariant
+        assertEquals(false, isValidCpf("390.533.447-05"))
+    }
+
+    // --- CNPJ validators ---
+
+    @Test
+    fun `valid CNPJs are accepted`() {
+        assertEquals(true, isValidCnpj("11222333000181"))
+        assertEquals(true, isValidCnpj("19131243000197"))
+    }
+
+    @Test
+    fun `CNPJs with wrong check digits are rejected`() {
+        assertEquals(false, isValidCnpj("11222333000180"))
+        assertEquals(false, isValidCnpj("19131243000100"))
+    }
+
+    @Test
+    fun `CNPJs with all repeated digits are rejected`() {
+        for (d in '0'..'9') assertEquals(false, isValidCnpj(d.toString().repeat(14)))
+    }
+
+    @Test
+    fun `CNPJs with wrong length are rejected`() {
+        assertEquals(false, isValidCnpj(""))
+        assertEquals(false, isValidCnpj("1122233300018"))
+        assertEquals(false, isValidCnpj("112223330001811"))
+    }
+
+    // --- isValidTaxId dispatcher ---
+
+    @Test
+    fun `isValidTaxId routes by length`() {
+        assertEquals(true, isValidTaxId("39053344705"))
+        assertEquals(true, isValidTaxId("11222333000181"))
+        assertEquals(false, isValidTaxId("12345678901"))
+        assertEquals(false, isValidTaxId("12345678901234"))
+        assertEquals(false, isValidTaxId(""))
+        assertEquals(false, isValidTaxId("1234567"))
     }
 }
