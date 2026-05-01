@@ -21,20 +21,34 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CreditCard
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.outlined.SupportAgent
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SelectableDates
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -59,7 +73,13 @@ import br.com.edu.core.ui.EduPurpleButton
 import br.com.edu.core.ui.EduSoftButton
 import br.com.edu.core.ui.EduTextField
 import br.com.edu.core.ui.MainBottomBar
+import br.com.edu.features.profile.data.remote.AddressInDto
+import br.com.edu.features.profile.data.remote.AddressPatchDto
+import br.com.edu.features.profile.domain.Address
 import br.com.edu.features.profile.domain.UserProfile
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +88,7 @@ fun ProfileScreen(
     onOpenMarketplace: () -> Unit,
     onOpenOrders: () -> Unit,
     onOpenPaymentMethods: () -> Unit,
+    onOpenSupport: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ProfileViewModel = viewModel(),
 ) {
@@ -138,8 +159,13 @@ fun ProfileScreen(
                     onStartEdit = viewModel::startEdit,
                     onCancelEdit = viewModel::cancelEdit,
                     onSave = viewModel::save,
+                    onCreateAddress = viewModel::createAddress,
+                    onUpdateAddress = viewModel::updateAddress,
+                    onDeleteAddress = viewModel::deleteAddress,
+                    onSetFavoriteAddress = viewModel::setFavorite,
                     onOpenOrders = onOpenOrders,
                     onOpenPaymentMethods = onOpenPaymentMethods,
+                    onOpenSupport = onOpenSupport,
                     onLogout = { viewModel.logout(onLogout) },
                 )
             }
@@ -153,8 +179,13 @@ private fun ProfileContent(
     onStartEdit: () -> Unit,
     onCancelEdit: () -> Unit,
     onSave: (name: String, phone: String, birthDate: String) -> Unit,
+    onCreateAddress: (AddressInDto) -> Unit,
+    onUpdateAddress: (Int, AddressPatchDto) -> Unit,
+    onDeleteAddress: (Int) -> Unit,
+    onSetFavoriteAddress: (Int) -> Unit,
     onOpenOrders: () -> Unit,
     onOpenPaymentMethods: () -> Unit,
+    onOpenSupport: () -> Unit,
     onLogout: () -> Unit,
 ) {
     Column(
@@ -174,9 +205,19 @@ private fun ProfileContent(
             onCancelEdit = onCancelEdit,
             onSave = onSave,
         )
+        AddressesSection(
+            addresses = state.addresses,
+            busy = state.addressBusy,
+            error = state.addressError,
+            onCreate = onCreateAddress,
+            onUpdate = onUpdateAddress,
+            onDelete = onDeleteAddress,
+            onSetFavorite = onSetFavoriteAddress,
+        )
         ShortcutsSection(
             onOpenOrders = onOpenOrders,
             onOpenPaymentMethods = onOpenPaymentMethods,
+            onOpenSupport = onOpenSupport,
         )
         EduSoftButton(
             text = "Sair da conta",
@@ -315,13 +356,8 @@ private fun EditForm(
             placeholder = "(11) 99999-9999",
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
         )
-        FieldLabel("Data de nascimento (AAAA-MM-DD)")
-        EduTextField(
-            value = birthDate,
-            onValueChange = { birthDate = it },
-            placeholder = "1990-05-12",
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        )
+        FieldLabel("Data de nascimento")
+        BirthDateField(value = birthDate, onValueChange = { birthDate = it })
         if (saveError != null) {
             Text(saveError, color = EduColors.Danger, style = MaterialTheme.typography.bodySmall)
         }
@@ -358,6 +394,7 @@ private fun FieldLabel(text: String) {
 private fun ShortcutsSection(
     onOpenOrders: () -> Unit,
     onOpenPaymentMethods: () -> Unit,
+    onOpenSupport: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
@@ -377,6 +414,12 @@ private fun ShortcutsSection(
             title = "Métodos de pagamento",
             subtitle = "Gerencie seus cartões",
             onClick = onOpenPaymentMethods,
+        )
+        ShortcutRow(
+            icon = Icons.Outlined.SupportAgent,
+            title = "Falar com Suporte",
+            subtitle = "Tire dúvidas com o Mentor Edu",
+            onClick = onOpenSupport,
         )
     }
 }
@@ -433,4 +476,404 @@ private fun formatBirthDate(iso: String): String {
     if (parts.size != 3) return iso
     val (y, m, d) = parts
     return "$d/$m/$y"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BirthDateField(value: String, onValueChange: (String) -> Unit) {
+    var showPicker by rememberSaveable { mutableStateOf(false) }
+    val display = if (value.isBlank()) "" else formatBirthDate(value)
+
+    Box {
+        EduTextField(
+            value = display,
+            onValueChange = {},
+            placeholder = "Selecione a data",
+            readOnly = true,
+            trailingIcon = {
+                Icon(Icons.Outlined.CalendarMonth, contentDescription = null, tint = EduColors.Purple)
+            },
+        )
+        Box(
+            Modifier
+                .matchParentSize()
+                .clickable { showPicker = true },
+        )
+    }
+
+    if (showPicker) {
+        val initialMillis = remember(value) {
+            runCatching { LocalDate.parse(value).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() }
+                .getOrNull()
+        }
+        val todayUtcMillis = remember {
+            LocalDate.now().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        }
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis <= todayUtcMillis
+                override fun isSelectableYear(year: Int) = year <= LocalDate.now().year
+            },
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pickerState.selectedDateMillis?.let {
+                        val date = Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
+                        onValueChange(date.toString())
+                    }
+                    showPicker = false
+                }) { Text("OK", color = EduColors.Purple) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) {
+                    Text("Cancelar", color = EduColors.TextSecondary)
+                }
+            },
+            colors = DatePickerDefaults.colors(containerColor = EduColors.White),
+        ) {
+            DatePicker(state = pickerState, showModeToggle = false)
+        }
+    }
+}
+
+@Composable
+private fun AddressesSection(
+    addresses: List<Address>,
+    busy: Boolean,
+    error: String?,
+    onCreate: (AddressInDto) -> Unit,
+    onUpdate: (Int, AddressPatchDto) -> Unit,
+    onDelete: (Int) -> Unit,
+    onSetFavorite: (Int) -> Unit,
+) {
+    var dialogState by rememberSaveable(stateSaver = AddressDialogStateSaver) {
+        mutableStateOf<AddressDialogState>(AddressDialogState.Hidden)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            "Endereços de entrega",
+            style = MaterialTheme.typography.titleMedium,
+            color = EduColors.TextPrimary,
+            fontWeight = FontWeight.Bold,
+        )
+
+        if (addresses.isEmpty()) {
+            EduCard(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(20.dp),
+                radius = 16.dp,
+                shadow = 1.dp,
+            ) {
+                Text(
+                    "Você ainda não cadastrou nenhum endereço.",
+                    color = EduColors.TextSecondary,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        } else {
+            addresses.forEach { address ->
+                AddressCard(
+                    address = address,
+                    onSetFavorite = { onSetFavorite(address.id) },
+                    onEdit = { dialogState = AddressDialogState.Edit(address.id) },
+                    onDelete = { onDelete(address.id) },
+                )
+            }
+        }
+
+        if (error != null) {
+            Text(error, color = EduColors.Danger, style = MaterialTheme.typography.bodySmall)
+        }
+
+        EduSoftButton(
+            text = if (busy) "Salvando..." else "Adicionar endereço",
+            onClick = { dialogState = AddressDialogState.Create },
+            container = EduColors.PurpleSoft,
+            content = EduColors.Purple,
+        )
+    }
+
+    when (val s = dialogState) {
+        AddressDialogState.Hidden -> Unit
+        AddressDialogState.Create -> AddressFormDialog(
+            initial = null,
+            onDismiss = { dialogState = AddressDialogState.Hidden },
+            onSubmit = {
+                onCreate(it)
+                dialogState = AddressDialogState.Hidden
+            },
+        )
+        is AddressDialogState.Edit -> {
+            val target = addresses.firstOrNull { it.id == s.id }
+            if (target == null) {
+                dialogState = AddressDialogState.Hidden
+            } else {
+                AddressFormDialog(
+                    initial = target,
+                    onDismiss = { dialogState = AddressDialogState.Hidden },
+                    onSubmit = { input ->
+                        onUpdate(
+                            target.id,
+                            AddressPatchDto(
+                                label = input.label,
+                                zipCode = input.zipCode,
+                                street = input.street,
+                                number = input.number,
+                                complement = input.complement,
+                                neighborhood = input.neighborhood,
+                                city = input.city,
+                                state = input.state,
+                                isFavorite = input.isFavorite,
+                            ),
+                        )
+                        dialogState = AddressDialogState.Hidden
+                    },
+                )
+            }
+        }
+    }
+}
+
+private sealed interface AddressDialogState {
+    data object Hidden : AddressDialogState
+    data object Create : AddressDialogState
+    data class Edit(val id: Int) : AddressDialogState
+}
+
+private val AddressDialogStateSaver = androidx.compose.runtime.saveable.Saver<AddressDialogState, Any>(
+    save = { state ->
+        when (state) {
+            AddressDialogState.Hidden -> "h"
+            AddressDialogState.Create -> "c"
+            is AddressDialogState.Edit -> "e:${state.id}"
+        }
+    },
+    restore = { value ->
+        val s = value as String
+        when {
+            s == "h" -> AddressDialogState.Hidden
+            s == "c" -> AddressDialogState.Create
+            s.startsWith("e:") -> AddressDialogState.Edit(s.substringAfter("e:").toInt())
+            else -> AddressDialogState.Hidden
+        }
+    },
+)
+
+@Composable
+private fun AddressCard(
+    address: Address,
+    onSetFavorite: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    EduCard(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(16.dp),
+        radius = 14.dp,
+        shadow = 1.dp,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .background(EduColors.PurpleSoft, RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.LocationOn, null, tint = EduColors.Purple)
+                }
+                Spacer(Modifier.size(12.dp))
+                Text(
+                    address.label.ifBlank { "Endereço" },
+                    style = MaterialTheme.typography.titleSmall,
+                    color = EduColors.TextPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (address.isFavorite) {
+                    Box(
+                        Modifier
+                            .background(EduColors.PurpleSoft, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            "Favorito",
+                            color = EduColors.Purple,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+            Text(
+                buildString {
+                    append(address.street)
+                    if (address.number.isNotBlank()) append(", ").append(address.number)
+                    if (address.complement.isNotBlank()) append(" — ").append(address.complement)
+                },
+                color = EduColors.TextPrimary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "${address.neighborhood} · ${address.city}/${address.state} · CEP ${address.zipCode}",
+                color = EduColors.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onSetFavorite, enabled = !address.isFavorite) {
+                    Icon(
+                        if (address.isFavorite) Icons.Outlined.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = "Favoritar",
+                        tint = if (address.isFavorite) EduColors.Purple else EduColors.TextSecondary,
+                    )
+                }
+                IconButton(onClick = onEdit) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "Editar", tint = EduColors.Purple)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Excluir", tint = EduColors.Danger)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddressFormDialog(
+    initial: Address?,
+    onDismiss: () -> Unit,
+    onSubmit: (AddressInDto) -> Unit,
+) {
+    var label by rememberSaveable { mutableStateOf(initial?.label.orEmpty()) }
+    var zipCode by rememberSaveable { mutableStateOf(initial?.zipCode.orEmpty()) }
+    var street by rememberSaveable { mutableStateOf(initial?.street.orEmpty()) }
+    var number by rememberSaveable { mutableStateOf(initial?.number.orEmpty()) }
+    var complement by rememberSaveable { mutableStateOf(initial?.complement.orEmpty()) }
+    var neighborhood by rememberSaveable { mutableStateOf(initial?.neighborhood.orEmpty()) }
+    var city by rememberSaveable { mutableStateOf(initial?.city.orEmpty()) }
+    var state by rememberSaveable { mutableStateOf(initial?.state.orEmpty()) }
+    var isFavorite by rememberSaveable { mutableStateOf(initial?.isFavorite ?: false) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        EduCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp),
+            contentPadding = PaddingValues(20.dp),
+            radius = 20.dp,
+            shadow = 8.dp,
+        ) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    if (initial == null) "Novo endereço" else "Editar endereço",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = EduColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                )
+                FieldLabel("Identificação (Casa, Trabalho)")
+                EduTextField(value = label, onValueChange = { label = it }, placeholder = "Casa")
+                FieldLabel("CEP")
+                EduTextField(
+                    value = zipCode,
+                    onValueChange = { zipCode = it },
+                    placeholder = "00000-000",
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                )
+                FieldLabel("Rua")
+                EduTextField(value = street, onValueChange = { street = it }, placeholder = "Av. Paulista")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("Número")
+                        EduTextField(value = number, onValueChange = { number = it }, placeholder = "1000")
+                    }
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("Complemento")
+                        EduTextField(value = complement, onValueChange = { complement = it }, placeholder = "Apto 12")
+                    }
+                }
+                FieldLabel("Bairro")
+                EduTextField(value = neighborhood, onValueChange = { neighborhood = it }, placeholder = "Centro")
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(2f)) {
+                        FieldLabel("Cidade")
+                        EduTextField(value = city, onValueChange = { city = it }, placeholder = "São Paulo")
+                    }
+                    Column(Modifier.weight(1f)) {
+                        FieldLabel("UF")
+                        EduTextField(
+                            value = state,
+                            onValueChange = { if (it.length <= 2) state = it.uppercase() },
+                            placeholder = "SP",
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = isFavorite, onCheckedChange = { isFavorite = it })
+                    Spacer(Modifier.size(12.dp))
+                    Text("Definir como favorito", color = EduColors.TextPrimary)
+                }
+                if (error != null) {
+                    Text(error!!, color = EduColors.Danger, style = MaterialTheme.typography.bodySmall)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    EduSoftButton(
+                        text = "Cancelar",
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                    )
+                    EduPurpleButton(
+                        text = if (initial == null) "Adicionar" else "Salvar",
+                        onClick = {
+                            val required = listOf(
+                                "CEP" to zipCode,
+                                "Rua" to street,
+                                "Número" to number,
+                                "Bairro" to neighborhood,
+                                "Cidade" to city,
+                                "UF" to state,
+                            )
+                            val missing = required.firstOrNull { it.second.isBlank() }
+                            if (missing != null) {
+                                error = "${missing.first} é obrigatório."
+                                return@EduPurpleButton
+                            }
+                            error = null
+                            onSubmit(
+                                AddressInDto(
+                                    label = label.trim(),
+                                    zipCode = zipCode.trim(),
+                                    street = street.trim(),
+                                    number = number.trim(),
+                                    complement = complement.trim(),
+                                    neighborhood = neighborhood.trim(),
+                                    city = city.trim(),
+                                    state = state.trim().uppercase(),
+                                    isFavorite = isFavorite,
+                                ),
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
 }
