@@ -4,7 +4,14 @@ from ninja import Query, Router
 
 from apps.accounts.auth import bearer_auth
 from apps.catalog.models import Product, Review
-from apps.catalog.schemas import ProductListOut, ReviewIn, ReviewListOut, ReviewOut
+from apps.catalog.schemas import (
+    CategoryListOut,
+    ProductListOut,
+    ProductOut,
+    ReviewIn,
+    ReviewListOut,
+    ReviewOut,
+)
 
 router = Router()
 
@@ -58,6 +65,23 @@ def list_products(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/categories", response=CategoryListOut)
+def list_categories(request):
+    rows = (
+        Product.objects.exclude(type="")
+        .values("type")
+        .annotate(count=Count("id"))
+        .order_by("type")
+    )
+    return {"items": [{"type": r["type"], "count": r["count"]} for r in rows]}
+
+
+@router.get("/{product_id}", response=ProductOut)
+def get_product(request, product_id: int):
+    product = get_object_or_404(_annotate_ratings(Product.objects.all()), pk=product_id)
+    return _serialize_product(product)
 
 
 @router.get("/{product_id}/reviews", response=ReviewListOut)

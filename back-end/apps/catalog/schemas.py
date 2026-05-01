@@ -41,3 +41,12 @@ class ReviewListOut(Schema):
 class ReviewIn(Schema):
     rating: int
     comment: str = ""
+
+
+class CategoryOut(Schema):
+    type: str
+    count: int
+
+
+class CategoryListOut(Schema):
+    items: list[CategoryOut]
