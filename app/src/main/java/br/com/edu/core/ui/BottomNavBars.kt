@@ -9,10 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
-import androidx.compose.material.icons.outlined.Login
+import androidx.compose.material.icons.automirrored.outlined.Login
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.PersonOutline
-import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.SupportAgent
 import androidx.compose.material3.Icon
@@ -101,13 +101,13 @@ private fun navItemColors() = NavigationBarItemDefaults.colors(
 private data class NavItem(val label: String, val icon: ImageVector)
 
 private val authItems = listOf(
-    NavItem("Entrar", Icons.Outlined.Login),
+    NavItem("Entrar", Icons.AutoMirrored.Outlined.Login),
     NavItem("Cadastro", Icons.Outlined.PersonAdd),
 )
 
 private val mainItems = listOf(
     NavItem("Loja", Icons.Outlined.Storefront),
-    NavItem("Pedidos", Icons.Outlined.ReceiptLong),
+    NavItem("Pedidos", Icons.AutoMirrored.Outlined.ReceiptLong),
     NavItem("Suporte", Icons.Outlined.SupportAgent),
     NavItem("Perfil", Icons.Outlined.PersonOutline),
 )

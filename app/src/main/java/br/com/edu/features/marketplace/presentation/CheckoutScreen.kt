@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
@@ -34,7 +34,7 @@ import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Pix
-import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -162,7 +162,7 @@ fun CheckoutScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
@@ -554,7 +554,7 @@ private fun PaymentMethodCard(
     val (icon, tint) = when (method.type) {
         PaymentMethodType.CREDIT_CARD -> Icons.Outlined.CreditCard to EduColors.Purple
         PaymentMethodType.PIX -> Icons.Outlined.Pix to EduColors.GreenDark
-        PaymentMethodType.BOLETO -> Icons.Outlined.ReceiptLong to EduColors.TextSecondary
+        PaymentMethodType.BOLETO -> Icons.AutoMirrored.Outlined.ReceiptLong to EduColors.TextSecondary
     }
     val border = if (selected) BorderStroke(2.dp, EduColors.Purple) else BorderStroke(0.dp, Color.Transparent)
     Surface(

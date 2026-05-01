@@ -20,12 +20,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Pix
-import androidx.compose.material.icons.outlined.ReceiptLong
+import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -141,7 +141,7 @@ fun AddPaymentMethodScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
@@ -283,7 +283,7 @@ private fun TypeSelector(selected: PaymentType, onChange: (PaymentType) -> Unit)
     val options = listOf(
         Triple(PaymentType.CreditCard, Icons.Outlined.CreditCard, "Cartão"),
         Triple(PaymentType.Pix, Icons.Outlined.Pix, "PIX"),
-        Triple(PaymentType.Boleto, Icons.Outlined.ReceiptLong, "Boleto"),
+        Triple(PaymentType.Boleto, Icons.AutoMirrored.Outlined.ReceiptLong, "Boleto"),
     )
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         options.forEach { (type, icon, label) ->
