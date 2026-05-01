@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -776,7 +777,7 @@ private fun AddressFormDialog(
 
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         EduCard(
             modifier = Modifier
@@ -787,7 +788,9 @@ private fun AddressFormDialog(
             shadow = 8.dp,
         ) {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .imePadding(),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Text(
