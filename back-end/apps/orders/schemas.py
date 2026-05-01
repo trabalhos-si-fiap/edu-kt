@@ -9,6 +9,9 @@ class OrderItemOut(Schema):
     product_name: str
     unit_price: Decimal
     quantity: int
+    image_url: str = ""
+    rating_avg: float = 0.0
+    rating_count: int = 0
 
 
 class OrderOut(Schema):
