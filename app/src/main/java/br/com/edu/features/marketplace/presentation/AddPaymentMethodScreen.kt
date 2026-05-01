@@ -66,11 +66,13 @@ import br.com.edu.features.payment.domain.CardNumberTransformation
 import br.com.edu.features.payment.domain.ExpiryTransformation
 import br.com.edu.features.payment.domain.PaymentMethod
 import br.com.edu.features.payment.domain.PaymentMethodType
+import br.com.edu.features.payment.domain.TaxIdTransformation
 import br.com.edu.features.payment.domain.brandFromNumber
 import br.com.edu.features.payment.domain.message
 import br.com.edu.features.payment.domain.sanitizeCardNumber
 import br.com.edu.features.payment.domain.sanitizeCvv
 import br.com.edu.features.payment.domain.sanitizeExpiry
+import br.com.edu.features.payment.domain.sanitizeTaxId
 import br.com.edu.features.payment.domain.validateCreditCardForm
 import br.com.edu.features.payment.presentation.PaymentMethodViewModel
 import kotlinx.coroutines.launch
@@ -102,7 +104,7 @@ fun AddPaymentMethodScreen(
     var cardName by rememberSaveable { mutableStateOf("") }
     var expiry by rememberSaveable { mutableStateOf("") }
     var cvv by rememberSaveable { mutableStateOf("") }
-    var pixKey by rememberSaveable { mutableStateOf("") }
+    var taxId by rememberSaveable { mutableStateOf("") }
     var saveAsDefault by rememberSaveable { mutableStateOf(false) }
     var existingLast4 by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
@@ -115,7 +117,7 @@ fun AddPaymentMethodScreen(
                 selected = existing.type.toUi()
                 cardName = existing.cardholderName.orEmpty()
                 expiry = existing.cardExpiry.orEmpty()
-                pixKey = existing.pixKey.orEmpty()
+                taxId = existing.cardholderTaxId.orEmpty()
                 saveAsDefault = existing.isDefault
                 existingLast4 = existing.cardLast4
                 cardNumber = ""
@@ -183,9 +185,11 @@ fun AddPaymentMethodScreen(
                         onExpiryChange = { expiry = sanitizeExpiry(it) },
                         cvv = cvv,
                         onCvvChange = { cvv = sanitizeCvv(it) },
+                        taxId = taxId,
+                        onTaxIdChange = { taxId = sanitizeTaxId(it) },
                     )
                 }
-                PaymentType.Pix -> PixFields(pixKey = pixKey, onPixChange = { pixKey = it })
+                PaymentType.Pix -> PixInfo()
                 PaymentType.Boleto -> BoletoInfo()
             }
 
@@ -202,9 +206,10 @@ fun AddPaymentMethodScreen(
                             cardName = cardName,
                             expiry = expiry,
                             cvv = cvv,
+                            taxId = taxId,
                             isEditing = isEditing,
                         )?.message()
-                        PaymentType.Pix -> if (pixKey.isBlank()) "Informe a chave PIX" else null
+                        PaymentType.Pix -> null
                         PaymentType.Boleto -> null
                     }
                     if (error != null) {
@@ -223,12 +228,12 @@ fun AddPaymentMethodScreen(
                                 cardBrand = brand ?: viewModel.getById(editingId.orEmpty())?.cardBrand,
                                 cardholderName = cardName,
                                 cardExpiry = expiry,
+                                cardholderTaxId = taxId,
                             )
                         }
                         PaymentType.Pix -> PaymentMethod(
                             id = editingId.orEmpty(),
                             type = PaymentMethodType.PIX,
-                            pixKey = pixKey,
                         )
                         PaymentType.Boleto -> PaymentMethod(
                             id = editingId.orEmpty(),
@@ -343,6 +348,8 @@ private fun CardFields(
     onExpiryChange: (String) -> Unit,
     cvv: String,
     onCvvChange: (String) -> Unit,
+    taxId: String,
+    onTaxIdChange: (String) -> Unit,
 ) {
     LabeledField("Número do cartão") {
         EduTextField(
@@ -384,22 +391,24 @@ private fun CardFields(
             }
         }
     }
+    LabeledField("CPF/CNPJ do titular") {
+        EduTextField(
+            value = taxId,
+            onValueChange = onTaxIdChange,
+            placeholder = "000.000.000-00",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            visualTransformation = TaxIdTransformation,
+        )
+    }
 }
 
 @Composable
-private fun PixFields(pixKey: String, onPixChange: (String) -> Unit) {
-    LabeledField("Chave PIX") {
-        EduTextField(
-            value = pixKey,
-            onValueChange = onPixChange,
-            placeholder = "CPF, e-mail, telefone ou chave aleatória",
-        )
-    }
+private fun PixInfo() {
     InfoBox(
         background = EduColors.GreenSoft.copy(alpha = 0.5f),
         contentColor = EduColors.GreenDark,
         icon = Icons.Outlined.Info,
-        message = "Aprovação imediata após o pagamento.",
+        message = "Ao finalizar o pedido, geramos um código PIX copia e cola para você pagar no app do seu banco. Aprovação imediata.",
     )
 }
 

@@ -21,8 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material.icons.outlined.NotificationsNone
-import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.AlertDialog
@@ -60,6 +58,7 @@ import br.com.edu.core.theme.EduColors
 import br.com.edu.core.theme.EduGradients
 import br.com.edu.core.ui.EduCard
 import br.com.edu.core.ui.EduSoftButton
+import br.com.edu.core.ui.MainBottomBar
 import br.com.edu.features.orders.domain.Order
 import br.com.edu.features.orders.domain.OrderItem
 import br.com.edu.features.orders.presentation.OrdersAction
@@ -75,6 +74,9 @@ import java.util.TimeZone
 fun OrdersScreen(
     onBack: () -> Unit,
     onOpenCheckout: () -> Unit = {},
+    onOpenMarketplace: () -> Unit = {},
+    onOpenSupport: () -> Unit = {},
+    onOpenProfile: () -> Unit = {},
     viewModel: OrdersViewModel = viewModel(),
 ) {
     val state by viewModel.state.collectAsState()
@@ -109,24 +111,35 @@ fun OrdersScreen(
             .background(EduGradients.Background),
         topBar = {
             CenterAlignedTopAppBar(
-                title = {},
+                title = {
+                    Text(
+                        "Seus pedidos",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = EduColors.TextPrimary,
+                        fontWeight = FontWeight.ExtraBold,
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Outlined.ArrowBack, null, tint = EduColors.TextPrimary)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Outlined.PersonOutline, null, tint = EduColors.TextPrimary)
-                    }
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Outlined.NotificationsNone, null, tint = EduColors.TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent),
             )
         },
         snackbarHost = { SnackbarHost(snackbarHost) },
+        bottomBar = {
+            MainBottomBar(
+                selected = 1,
+                onTabSelected = { index ->
+                    when (index) {
+                        0 -> onOpenMarketplace()
+                        2 -> onOpenSupport()
+                        3 -> onOpenProfile()
+                    }
+                },
+            )
+        },
     ) { padding ->
         Box(
             modifier = Modifier
@@ -225,13 +238,6 @@ private fun OrdersList(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        item {
-            Text(
-                "Seus pedidos",
-                style = MaterialTheme.typography.displayLarge,
-                color = EduColors.TextPrimary,
-            )
-        }
         items(orders, key = { it.id }) { order ->
             DeliveredOrderCard(
                 order = order,
@@ -327,10 +333,10 @@ private fun DeliveredOrderCard(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) {
                     EduSoftButton(
-                        text = "Comprar novamente",
+                        text = "Comprar\nnovamente",
                         onClick = onRebuy,
                         container = EduColors.PurpleSoft,
                         content = EduColors.Purple,
@@ -339,7 +345,7 @@ private fun DeliveredOrderCard(
                 Spacer(Modifier.width(12.dp))
                 Box(Modifier.weight(1f)) {
                     EduSoftButton(
-                        text = "Avaliar itens",
+                        text = "Avaliar\nitens",
                         onClick = onReview,
                         container = EduColors.White,
                         content = EduColors.TextPrimary,

@@ -25,8 +25,10 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreditCard
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
@@ -68,6 +70,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,6 +86,8 @@ import br.com.edu.features.cart.presentation.CartUiState
 import br.com.edu.features.cart.presentation.CartViewModel
 import br.com.edu.features.orders.data.OrdersRepository
 import br.com.edu.features.payment.domain.PaymentMethod
+import br.com.edu.features.profile.data.AddressRepository
+import br.com.edu.features.profile.domain.Address
 import br.com.edu.features.payment.domain.PaymentMethodType
 import br.com.edu.features.payment.presentation.PaymentMethodViewModel
 
@@ -100,15 +106,34 @@ fun CheckoutScreen(
     var selectedPaymentId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<PaymentMethod?>(null) }
     var showFinalizeDialog by remember { mutableStateOf(false) }
+    var pixCode by remember { mutableStateOf<String?>(null) }
+    var boletoCode by remember { mutableStateOf<String?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
+    val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val ordersRepository = remember { OrdersRepository() }
+    val addressRepository = remember { AddressRepository() }
     var placingOrder by remember { mutableStateOf(false) }
+    var addresses by remember { mutableStateOf<List<Address>>(emptyList()) }
+    var selectedAddressId by rememberSaveable { mutableStateOf<Int?>(null) }
     val cart = (cartState as? CartUiState.Ready)?.cart
+    val addressOk = addresses.isEmpty() || selectedAddressId != null
     val canFinalize = !busy && !placingOrder &&
         cart != null && cart.items.isNotEmpty() &&
-        selectedPaymentId != null
+        selectedPaymentId != null && addressOk
     val selectedMethod = paymentMethods.firstOrNull { it.id == selectedPaymentId }
+    val selectedAddress = addresses.firstOrNull { it.id == selectedAddressId }
+
+    LaunchedEffect(Unit) {
+        runCatching { addressRepository.list() }
+            .onSuccess { list ->
+                addresses = list
+                if (selectedAddressId == null) {
+                    selectedAddressId = list.firstOrNull { it.isFavorite }?.id
+                        ?: list.firstOrNull()?.id
+                }
+            }
+    }
 
     LaunchedEffect(paymentMethods) {
         val current = selectedPaymentId
@@ -240,6 +265,32 @@ fun CheckoutScreen(
             Spacer(Modifier.height(32.dp))
 
             Text(
+                "Endereço de Entrega",
+                style = MaterialTheme.typography.titleLarge,
+                color = EduColors.TextPrimary,
+            )
+            Spacer(Modifier.height(16.dp))
+            if (addresses.isEmpty()) {
+                Text(
+                    "Você ainda não cadastrou nenhum endereço. Cadastre em Perfil > Endereços.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EduColors.TextSecondary,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            } else {
+                addresses.forEachIndexed { idx, addr ->
+                    if (idx > 0) Spacer(Modifier.height(12.dp))
+                    AddressOptionCard(
+                        address = addr,
+                        selected = selectedAddressId == addr.id,
+                        onClick = { selectedAddressId = addr.id },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            Text(
                 "Método de Pagamento",
                 style = MaterialTheme.typography.titleLarge,
                 color = EduColors.TextPrimary,
@@ -313,9 +364,11 @@ fun CheckoutScreen(
             onDismissRequest = { showFinalizeDialog = false },
             title = { Text("Confirmar pedido") },
             text = {
+                val addrLine = selectedAddress?.let { "\nEntrega: ${addressSummary(it)}" }.orEmpty()
                 Text(
                     "Total: ${formatBRL(cart.total)}\n" +
-                        "Pagamento: ${paymentTitle(selectedMethod)}",
+                        "Pagamento: ${paymentTitle(selectedMethod)}" +
+                        addrLine,
                 )
             },
             confirmButton = {
@@ -330,8 +383,14 @@ fun CheckoutScreen(
                             result
                                 .onSuccess {
                                     cartViewModel.load()
-                                    snackbarHost.showSnackbar("Pedido finalizado com sucesso!")
-                                    onBack()
+                                    when (selectedMethod.type) {
+                                        PaymentMethodType.PIX -> pixCode = generatePixCopyPasteCode()
+                                        PaymentMethodType.BOLETO -> boletoCode = generateBoletoLinhaDigitavel()
+                                        PaymentMethodType.CREDIT_CARD -> {
+                                            snackbarHost.showSnackbar("Pedido finalizado com sucesso!")
+                                            onBack()
+                                        }
+                                    }
                                 }
                                 .onFailure {
                                     snackbarHost.showSnackbar(
@@ -346,6 +405,122 @@ fun CheckoutScreen(
                 TextButton(onClick = { showFinalizeDialog = false }) { Text("Cancelar") }
             },
         )
+    }
+
+    pixCode?.let { code ->
+        CopyCodeDialog(
+            title = "Pague com PIX",
+            description = "Copie o código abaixo e cole no app do seu banco para concluir o pagamento.",
+            code = code,
+            copiedMessage = "Código PIX copiado",
+            onClose = {
+                pixCode = null
+                onBack()
+            },
+            clipboardManager = clipboardManager,
+            snackbarHost = snackbarHost,
+            scope = scope,
+        )
+    }
+
+    boletoCode?.let { code ->
+        CopyCodeDialog(
+            title = "Pague com Boleto",
+            description = "Copie a linha digitável abaixo e pague no app do seu banco. Compensação em até 2 dias úteis.",
+            code = code,
+            copiedMessage = "Linha digitável copiada",
+            onClose = {
+                boletoCode = null
+                onBack()
+            },
+            clipboardManager = clipboardManager,
+            snackbarHost = snackbarHost,
+            scope = scope,
+        )
+    }
+}
+
+@Composable
+private fun CopyCodeDialog(
+    title: String,
+    description: String,
+    code: String,
+    copiedMessage: String,
+    onClose: () -> Unit,
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager,
+    snackbarHost: SnackbarHostState,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = EduColors.TextSecondary,
+                )
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = EduColors.InputFill,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        code,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = EduColors.TextPrimary,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            clipboardManager.setText(AnnotatedString(code))
+                            scope.launch { snackbarHost.showSnackbar(copiedMessage) }
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.ContentCopy,
+                        null,
+                        tint = EduColors.Purple,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Copiar código",
+                        color = EduColors.Purple,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text("Concluir", color = EduColors.Purple) }
+        },
+    )
+}
+
+private fun generatePixCopyPasteCode(): String {
+    val txid = (1..25)
+        .map { "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".random() }
+        .joinToString("")
+    return "00020126360014BR.GOV.BCB.PIX0114+55119999999995204000053039865802BR5909EDU STORE6009SAO PAULO62290525${txid}6304ABCD"
+}
+
+private fun generateBoletoLinhaDigitavel(): String {
+    val digits = (1..47).map { "0123456789".random() }.joinToString("")
+    return buildString {
+        append(digits.substring(0, 5)).append('.').append(digits.substring(5, 10)).append(' ')
+        append(digits.substring(10, 15)).append('.').append(digits.substring(15, 21)).append(' ')
+        append(digits.substring(21, 26)).append('.').append(digits.substring(26, 32)).append(' ')
+        append(digits.substring(32, 33)).append(' ')
+        append(digits.substring(33, 47))
     }
 }
 
@@ -363,10 +538,7 @@ private fun paymentSubtitle(m: PaymentMethod): String = when (m.type) {
         )
         if (parts.isEmpty()) "Cartão de crédito" else parts.joinToString(" • ")
     }
-    PaymentMethodType.PIX -> {
-        val key = m.pixKey.orEmpty()
-        if (key.length > 12) key.take(8) + "…" else key.ifBlank { "Aprovação imediata" }
-    }
+    PaymentMethodType.PIX -> "Código gerado na finalização • Aprovação imediata"
     PaymentMethodType.BOLETO -> "Compensação em até 2 dias úteis"
 }
 
@@ -574,14 +746,12 @@ private fun CartItemCard(
                         Surface(
                             color = categoryBg,
                             shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.weight(1f, fill = false),
                         ) {
                             Text(
                                 item.subtype.uppercase().ifBlank { item.type.uppercase() },
                                 color = categoryFg,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp,
-                                maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             )
                         }
@@ -737,6 +907,88 @@ private fun PaymentOption(
                 Text(title, style = MaterialTheme.typography.titleMedium, color = EduColors.TextPrimary)
                 Spacer(Modifier.height(2.dp))
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = EduColors.TextSecondary)
+            }
+            if (selected) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .background(EduColors.Purple, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Outlined.Check, null, tint = EduColors.White, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+private fun addressSummary(a: Address): String {
+    val line1 = listOf(a.street, a.number).filter { it.isNotBlank() }.joinToString(", ")
+    val line2 = listOf(a.neighborhood, "${a.city}/${a.state}".trim('/'))
+        .filter { it.isNotBlank() }
+        .joinToString(" — ")
+    return listOf(line1, line2).filter { it.isNotBlank() }.joinToString(" — ")
+}
+
+@Composable
+private fun AddressOptionCard(
+    address: Address,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val border = if (selected) BorderStroke(2.dp, EduColors.Purple) else BorderStroke(0.dp, Color.Transparent)
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .border(border, RoundedCornerShape(16.dp)),
+        shape = RoundedCornerShape(16.dp),
+        color = if (selected) EduColors.White else EduColors.InputFill,
+        shadowElevation = if (selected) 2.dp else 0.dp,
+    ) {
+        Row(
+            Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(48.dp)
+                    .background(EduColors.White, RoundedCornerShape(12.dp))
+                    .border(1.dp, EduColors.InputBorder, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Outlined.LocationOn, null, tint = EduColors.Purple)
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        address.label.ifBlank { "Endereço" },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = EduColors.TextPrimary,
+                    )
+                    if (address.isFavorite) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            color = EduColors.PurpleSoft,
+                            shape = RoundedCornerShape(20.dp),
+                        ) {
+                            Text(
+                                "FAVORITO",
+                                color = EduColors.Purple,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    addressSummary(address),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = EduColors.TextSecondary,
+                )
             }
             if (selected) {
                 Box(
