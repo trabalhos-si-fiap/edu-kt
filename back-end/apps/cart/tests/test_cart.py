@@ -6,8 +6,11 @@ from apps.catalog.models import Product
 @pytest.fixture
 def product(db):
     return Product.objects.create(
-        name="Apostila", type="APOSTILA", subtype="DIGITAL",
-        description="d", price="10.00",
+        name="Apostila",
+        type="APOSTILA",
+        subtype="DIGITAL",
+        description="d",
+        price="10.00",
     )
 
 
@@ -53,9 +56,7 @@ def test_add_existing_product_increments_quantity(client, auth_headers, product)
 
 @pytest.mark.django_db
 def test_add_unknown_product_returns_404(client, auth_headers):
-    res = client.post(
-        "/cart/items", json={"product_id": 9999, "quantity": 1}, headers=auth_headers
-    )
+    res = client.post("/cart/items", json={"product_id": 9999, "quantity": 1}, headers=auth_headers)
     assert res.status_code == 404
 
 
@@ -69,9 +70,7 @@ def test_remove_item_from_cart(client, auth_headers, product):
 
 @pytest.mark.django_db
 def test_remove_partial_quantity_decrements(client, auth_headers, product):
-    client.post(
-        "/cart/items", json={"product_id": product.id, "quantity": 5}, headers=auth_headers
-    )
+    client.post("/cart/items", json={"product_id": product.id, "quantity": 5}, headers=auth_headers)
     res = client.delete(f"/cart/items/{product.id}?quantity=2", headers=auth_headers)
     assert res.status_code == 200
     body = res.json()
@@ -81,9 +80,7 @@ def test_remove_partial_quantity_decrements(client, auth_headers, product):
 
 @pytest.mark.django_db
 def test_remove_quantity_equal_or_greater_drops_item(client, auth_headers, product):
-    client.post(
-        "/cart/items", json={"product_id": product.id, "quantity": 2}, headers=auth_headers
-    )
+    client.post("/cart/items", json={"product_id": product.id, "quantity": 2}, headers=auth_headers)
     res = client.delete(f"/cart/items/{product.id}?quantity=10", headers=auth_headers)
     assert res.status_code == 200
     assert res.json()["items"] == []
@@ -98,10 +95,13 @@ def test_remove_invalid_quantity_returns_400(client, auth_headers, product):
 
 @pytest.mark.django_db
 def test_cart_is_isolated_per_user(client, auth_headers, product):
-    from apps.accounts.models import Token, User
+    from ninja_jwt.tokens import RefreshToken
+
+    from apps.accounts.models import User
 
     other = User.objects.create_user(username="bob", email="bob@x.com", password="pw")
-    other_headers = {"Authorization": f"Bearer {Token.objects.create(user=other).key}"}
+    other_access = str(RefreshToken.for_user(other).access_token)
+    other_headers = {"Authorization": f"Bearer {other_access}"}
 
     client.post("/cart/items", json={"product_id": product.id}, headers=auth_headers)
     res = client.get("/cart", headers=other_headers)

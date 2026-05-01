@@ -51,9 +51,7 @@ def rebuy_order(user, order_id: int) -> Cart:
         if existing is None:
             CartItem.objects.create(cart=cart, product=it.product, quantity=it.quantity)
         else:
-            CartItem.objects.filter(pk=existing.pk).update(
-                quantity=F("quantity") + it.quantity
-            )
+            CartItem.objects.filter(pk=existing.pk).update(quantity=F("quantity") + it.quantity)
     return cart
 
 

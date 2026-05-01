@@ -6,16 +6,17 @@ from apps.catalog.models import Product
 @pytest.fixture
 def product(db):
     return Product.objects.create(
-        name="Apostila", type="APOSTILA", subtype="DIGITAL",
-        description="d", price="10.00",
+        name="Apostila",
+        type="APOSTILA",
+        subtype="DIGITAL",
+        description="d",
+        price="10.00",
     )
 
 
 @pytest.mark.django_db
 def test_create_order_from_cart_persists_and_clears_cart(client, auth_headers, product):
-    client.post(
-        "/cart/items", json={"product_id": product.id, "quantity": 2}, headers=auth_headers
-    )
+    client.post("/cart/items", json={"product_id": product.id, "quantity": 2}, headers=auth_headers)
     res = client.post("/orders", headers=auth_headers)
     assert res.status_code == 201
     body = res.json()

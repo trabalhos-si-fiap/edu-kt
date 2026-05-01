@@ -1,6 +1,7 @@
 import pytest
+from ninja_jwt.tokens import RefreshToken
 
-from apps.accounts.models import Address, Token, User
+from apps.accounts.models import Address, User
 
 
 def _payload(**overrides):
@@ -39,9 +40,7 @@ def test_create_address(client, user, auth_headers):
 @pytest.mark.django_db
 def test_list_after_create(client, auth_headers):
     client.post("/auth/addresses", json=_payload(label="A"), headers=auth_headers)
-    client.post(
-        "/auth/addresses", json=_payload(label="B", is_favorite=True), headers=auth_headers
-    )
+    client.post("/auth/addresses", json=_payload(label="B", is_favorite=True), headers=auth_headers)
     res = client.get("/auth/addresses", headers=auth_headers)
     assert res.status_code == 200
     body = res.json()
@@ -52,9 +51,7 @@ def test_list_after_create(client, auth_headers):
 
 @pytest.mark.django_db
 def test_patch_address(client, auth_headers):
-    created = client.post(
-        "/auth/addresses", json=_payload(), headers=auth_headers
-    ).json()
+    created = client.post("/auth/addresses", json=_payload(), headers=auth_headers).json()
     res = client.patch(
         f"/auth/addresses/{created['id']}",
         json={"label": "Trabalho", "number": "2000"},
@@ -72,9 +69,7 @@ def test_promote_to_favorite_demotes_previous(client, user, auth_headers):
     a = client.post(
         "/auth/addresses", json=_payload(label="A", is_favorite=True), headers=auth_headers
     ).json()
-    b = client.post(
-        "/auth/addresses", json=_payload(label="B"), headers=auth_headers
-    ).json()
+    b = client.post("/auth/addresses", json=_payload(label="B"), headers=auth_headers).json()
     res = client.patch(
         f"/auth/addresses/{b['id']}", json={"is_favorite": True}, headers=auth_headers
     )
@@ -92,11 +87,9 @@ def test_cannot_access_other_users_address(client, auth_headers):
     other = User.objects.create_user(
         username="other", email="other@example.com", password="pw12345!"
     )
-    other_token = Token.objects.create(user=other)
-    other_headers = {"Authorization": f"Bearer {other_token.key}"}
-    other_addr = client.post(
-        "/auth/addresses", json=_payload(), headers=other_headers
-    ).json()
+    other_access = str(RefreshToken.for_user(other).access_token)
+    other_headers = {"Authorization": f"Bearer {other_access}"}
+    other_addr = client.post("/auth/addresses", json=_payload(), headers=other_headers).json()
 
     res = client.patch(
         f"/auth/addresses/{other_addr['id']}",
@@ -111,9 +104,7 @@ def test_cannot_access_other_users_address(client, auth_headers):
 
 @pytest.mark.django_db
 def test_delete_favorite_then_create_new_favorite(client, user, auth_headers):
-    a = client.post(
-        "/auth/addresses", json=_payload(is_favorite=True), headers=auth_headers
-    ).json()
+    a = client.post("/auth/addresses", json=_payload(is_favorite=True), headers=auth_headers).json()
     res = client.delete(f"/auth/addresses/{a['id']}", headers=auth_headers)
     assert res.status_code == 204
 
