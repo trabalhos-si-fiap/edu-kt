@@ -4,6 +4,36 @@ Port nativo das telas do app Flutter `estuda_app` para Android usando **Kotlin**
 
 > Documentação técnica detalhada (arquitetura, design system, telas, navegação, persistência, integração com back-end) em [`docs/`](docs/README.md).
 
+## Para o avaliador (FIAP — Fase 3)
+
+Documentos da entrega:
+
+- [docs/produto.md](docs/produto.md) — Parte 1: funcionalidades, concorrentes, diferenciais
+- [docs/ia.md](docs/ia.md) — Parte 2: reflexão sobre IA conversacional e generativa
+- [docs/navigation.md](docs/navigation.md) — Parte 3: Scaffold, rotas, troca de dados, fluxo
+- [docs/wireframes.md](docs/wireframes.md) — Parte 4: protótipo (o app é o protótipo)
+- Parte 5: o app em si — comandos abaixo
+
+**Pré-requisitos:** JDK 17 ou 21, Docker + Compose, Android SDK (Platform 35 + Build-Tools 34) com um emulador AVD criado **ou** um dispositivo Android conectado via USB com depuração ativada.
+
+**Subir tudo em um comando** (Linux/macOS):
+
+```bash
+make doctor          # confere JDK, Docker, porta 8000, AVD e IP atual
+make dev             # setup + IP + sobe backend + emulador + instala/abre o app
+```
+
+**Login seedado:** `admin@admin.local` / `admin`
+
+Se a detecção automática de IP errar (VPN, segunda interface), force:
+
+```bash
+make configure-ip IP=192.168.x.x
+make run
+```
+
+Detalhes manuais (sem Makefile) e Windows: [Quick start](#quick-start-clonou-agora) e [docs/windows-setup.md](docs/windows-setup.md).
+
 ## Telas implementadas
 
 | Rota | Tela | Origem Flutter |
