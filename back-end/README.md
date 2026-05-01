@@ -22,8 +22,14 @@ uv run python manage.py seed_admin
 uv run granian --interface asgi config.asgi:application --host 0.0.0.0 --port 8000 --reload
 ```
 
-API em `http://localhost:8000/api/` · Docs OpenAPI em `http://localhost:8000/api/docs` ·
-Django admin em `http://localhost:8000/admin/`.
+Pontos de acesso (com o servidor rodando em `localhost:8000`):
+
+| Recurso | URL | Auth |
+|---|---|---|
+| API | `http://localhost:8000/api/` | Bearer JWT (ver [Autenticação](#autenticação)) |
+| **OpenAPI / Swagger UI** | `http://localhost:8000/api/docs` | — (público) |
+| **OpenAPI schema (JSON)** | `http://localhost:8000/api/openapi.json` | — |
+| **Django admin** | `http://localhost:8000/admin/` | session login (`admin@admin.local` / `admin` — ver [Superusuário padrão](#superusuário-padrão)) |
 
 > `collectstatic` só é necessário sob Granian/produção. Sob `runserver` (DEBUG=1) o
 > WhiteNoise serve direto da árvore de origem via `whitenoise.runserver_nostatic`.
@@ -60,7 +66,7 @@ uv run ruff check .
 back-end/
 ├── config/                     # Django project (settings, urls, asgi, NinjaAPI)
 ├── apps/
-│   ├── accounts/               # User + Token bearer auth
+│   ├── accounts/               # User + Address + JWTAuth (django-ninja-jwt)
 │   ├── catalog/                # Product + Review + GET /products, /products/{id}, /products/{id}/reviews
 │   │   └── management/commands/seed_catalog.py
 │   ├── cart/                   # Cart, CartItem, services, /cart endpoints
@@ -74,8 +80,12 @@ back-end/
 
 | Método | Rota | Auth | Descrição |
 |---|---|---|---|
-| POST | `/api/auth/register` | — | `{email, password, name?}` → `{token, email}` |
-| POST | `/api/auth/login` | — | `{email, password}` → `{token, email}` |
+| POST | `/api/auth/register` | — | `{email, password, name?, phone?, birth_date?}` → `{access, refresh, email}` (par JWT) |
+| POST | `/api/auth/login` | — | `{email, password}` → `{access, refresh, email}` |
+| POST | `/api/auth/refresh` | — | `{refresh}` → `{access, refresh}`. Rotaciona o par e blacklista o refresh recebido (segundo uso → 401). |
+| POST | `/api/auth/logout` | bearer | `{refresh}` → 204. Coloca o refresh na blacklist server-side. |
+| GET / PATCH | `/api/auth/me` | bearer | Lê / edita perfil (nome, telefone, `birth_date` ISO). |
+| GET / POST / PATCH / DELETE | `/api/auth/addresses[/{id}]` | bearer | CRUD de endereços do usuário (com `is_favorite` único por usuário). |
 | GET | `/api/products` | — | Lista catálogo paginado. Query params: `q` (busca em `name`/`description`/`type`/`subtype`, `icontains`), `limit` (1–100, default 20), `offset` (≥0, default 0). Resposta: `{items: [...], total, limit, offset}`. Cada item inclui `rating_avg` (float 0–5) e `rating_count` (int) agregados via `Avg/Count` em `reviews`. |
 | GET | `/api/products/{id}` | — | Detalhe de um produto com `rating_avg`/`rating_count` agregados. Mesmo shape do item de `/api/products`. 404 se não existir. Usado pela `ProductDetailScreen` no app, que precisa abrir produtos por id sem depender da página atual da listagem. |
 | GET | `/api/products/categories` | — | Tipos distintos do catálogo (apenas `type` não vazio) com `count` por tipo, ordenados alfabeticamente. Resposta: `{items: [{type, count}]}`. |
@@ -109,12 +119,17 @@ back-end/
 
 ## Django admin
 
-Habilitado em `/admin/` e protegido pelo middleware padrão de auth/session/csrf.
+Habilitado em `http://localhost:8000/admin/` e protegido pelo middleware padrão de
+auth/session/csrf. **Login via session** (não JWT) — abra a URL no navegador e
+informe email + senha. Use as credenciais do superusuário padrão (abaixo) ou crie
+outro com `uv run python manage.py createsuperuser`.
+
 Modelos registrados:
 
 | App | Modelos |
 |---|---|
-| accounts | `User` (estende `UserAdmin`), `Token` |
+| accounts | `User` (estende `UserAdmin`), `Address` |
+| ninja_jwt | `OutstandingToken`, `BlacklistedToken` (registrados pelo `ninja_jwt.token_blacklist`) |
 | catalog | `Product` (filtros por `type`/`subtype`, busca por `name`/`description`), `Review` (filtro por `rating`, busca por `author`/`comment`/`product__name`) |
 | cart | `Cart` (com inline de `CartItem`), `CartItem` |
 | orders | `Order` (com inline readonly de `OrderItem`), `OrderItem` |
@@ -148,37 +163,62 @@ Definido em `apps/catalog/management/commands/seed_catalog.py`. Idempotente — 
 
 O comando também popula **3–8 reviews por produto** (rating, autor e comentário escolhidos por hash determinístico do nome, garantindo seed reproduzível). A criação de reviews é **idempotente por produto**: só insere se `product.reviews` estiver vazio, então rodar `seed_catalog` várias vezes não duplica. Para forçar reseed, apague as reviews (`Review.objects.all().delete()`) antes.
 
+## OpenAPI / Swagger UI
+
+A API expõe o schema OpenAPI 3 e uma UI interativa automaticamente via django-ninja:
+
+| Endpoint | Conteúdo |
+|---|---|
+| `http://localhost:8000/api/docs` | **Swagger UI** — todas as rotas com payloads de exemplo e botão "Try it out" |
+| `http://localhost:8000/api/openapi.json` | Schema OpenAPI 3 cru (útil para gerar clientes ou importar no Postman/Insomnia) |
+
+Como autenticar dentro do Swagger:
+
+1. Faça `POST /api/auth/login` direto pela UI (ou via curl) e copie o `access` da resposta.
+2. Clique em **Authorize** (cadeado no topo) e cole `Bearer <access>`.
+3. Endpoints marcados como `bearer` agora aceitam suas chamadas pela UI.
+
+Quando o access expirar (15 min), use `POST /api/auth/refresh` com o `refresh` para obter
+um novo par e atualize o cabeçalho.
+
 ## Fluxo manual via curl
 
 ```bash
-TOKEN=$(curl -s -X POST localhost:8000/api/auth/register \
+# Login → captura o access JWT
+ACCESS=$(curl -s -X POST localhost:8000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"a@b.com","password":"pw12345!"}' | jq -r .token)
+  -d '{"email":"admin@admin.local","password":"admin"}' | jq -r .access)
 
 curl -s 'localhost:8000/api/products?q=enem&limit=5' | jq '.items[0], .total'
 
 curl -X POST localhost:8000/api/cart/items \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $ACCESS" \
   -H 'Content-Type: application/json' \
   -d '{"product_id": 1, "quantity": 2}'
 
 curl -X POST localhost:8000/api/orders \
-  -H "Authorization: Bearer $TOKEN"
+  -H "Authorization: Bearer $ACCESS"
 ```
 
 ## Autenticação
 
-Endpoints marcados como `bearer` aceitam o token de três formas no header `Authorization`:
+JWT (HS256, par access + refresh) via [django-ninja-jwt](https://pypi.org/project/django-ninja-jwt/).
+
+- **Access token** — vida curta (15 min). Stateless, validado por assinatura contra `SECRET_KEY`.
+- **Refresh token** — vida longa (7 dias). Cada `POST /api/auth/refresh` rotaciona o par e
+  blacklista o refresh anterior (`ninja_jwt.token_blacklist`); reutilizar o mesmo refresh
+  duas vezes resulta em 401.
+- **Logout** — `POST /api/auth/logout` com o refresh atual o coloca na blacklist server-side.
+
+Header obrigatório nos endpoints marcados como `bearer`:
 
 ```
-Authorization: Bearer <token>
-Authorization: Token <token>
-Authorization: <token>
+Authorization: Bearer <access>
 ```
 
-`apps/accounts/auth.BearerAuth` faz `header.split()[-1]` e valida só o último termo, então
-qualquer prefixo conhecido (ou nenhum) funciona. Padrão recomendado: `Bearer` (formato OpenAPI
-e o que o app Kotlin envia).
+Configuração em `config/settings.py::NINJA_JWT`. `SECRET_KEY` é lida de `DJANGO_SECRET_KEY`;
+quando a env var está ausente em DEBUG, cai num default `INSECURE-askldiqj` com warning no
+log; em DEBUG=False, a ausência levanta `ImproperlyConfigured`. Veja `.env.example`.
 
 ## Convenções
 

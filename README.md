@@ -25,6 +25,14 @@ make dev             # setup + IP + sobe backend + emulador + instala/abre o app
 
 **Login seedado:** `admin@admin.local` / `admin`
 
+Com o backend rodando (`make backend-up` ou `make dev`), também ficam disponíveis:
+
+- **Django admin** — `http://localhost:8000/admin/` (mesmo email/senha do login seedado)
+- **OpenAPI / Swagger UI** — `http://localhost:8000/api/docs`
+- **Schema OpenAPI cru** — `http://localhost:8000/api/openapi.json`
+
+Detalhes em [back-end/README.md](back-end/README.md#openapi--swagger-ui).
+
 Se a detecção automática de IP errar (VPN, segunda interface), force:
 
 ```bash

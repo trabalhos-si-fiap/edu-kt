@@ -8,9 +8,11 @@ Estado atual da integração entre o app Android e o backend Django, e as diretr
 
 | Feature | Endpoint | Status |
 |---|---|---|
-| Login | `POST /api/auth/login` | ✅ Tela `LoginScreen` chama o backend, salva token, navega ao Marketplace |
-| Cadastro | `POST /api/auth/register` | ✅ Tela `RegisterScreen` valida localmente e cria conta no backend; persiste `name`/`phone`/`birth_date` (nome é dividido em `first_name` + `last_name`) |
-| Perfil | `GET /api/auth/me`, `PATCH /api/auth/me` | ✅ `ProfileScreen` carrega e edita nome/telefone/data de nascimento; ambas exigem `Authorization: Bearer <key>`. `birth_date` em ISO `YYYY-MM-DD` (string vazia limpa o campo); formato inválido retorna 400 |
+| Login | `POST /api/auth/login` | ✅ `LoginScreen` chama o backend, recebe `{access, refresh, email}`, salva o par e navega ao Marketplace |
+| Cadastro | `POST /api/auth/register` | ✅ `RegisterScreen` valida localmente e cria a conta; resposta também é `{access, refresh, email}`. Persiste `name`/`phone`/`birth_date` (nome dividido em `first_name` + `last_name`) |
+| Refresh de sessão | `POST /api/auth/refresh` | ✅ `TokenAuthenticator` (OkHttp `Authenticator`) consome o refresh em qualquer 401, troca o par e re-tenta a request original — transparente para a UI |
+| Logout | `POST /api/auth/logout` | ✅ `AuthRepository.logout()` envia o refresh atual para a blacklist server-side e limpa o `TokenStore` |
+| Perfil | `GET /api/auth/me`, `PATCH /api/auth/me` | ✅ `ProfileScreen` carrega e edita nome/telefone/data de nascimento; ambas exigem `Authorization: Bearer <access>`. `birth_date` em ISO `YYYY-MM-DD` (string vazia limpa o campo); formato inválido retorna 400 |
 | Catálogo | `GET /api/products` | ✅ `MarketplaceScreen` lista produtos reais com imagem (Coil), com busca server-side (`?q=`) e paginação (`?limit=&offset=`); resposta `{items, total, limit, offset}` inclui `rating_avg` (0–5) e `rating_count` por produto. Campo de busca debounce 300ms no `MarketplaceViewModel`. |
 | Detalhe do produto | `GET /api/products/{id}` | ✅ `ProductDetailScreen` busca o produto por id direto no backend (não filtra a listagem paginada — antes falhava com "Produto não encontrado" para qualquer item além do limite default de 20). Resposta com `rating_avg`/`rating_count` agregados. |
 | Avaliações | `GET /api/products/{id}/reviews` | ✅ `ReviewsBottomSheet` abre ao tocar nas estrelas do card; resposta `{items, total, rating_avg, rating_count}` com `author/rating/comment/created_at`. Paginação `?limit=&offset=`. |
@@ -65,26 +67,47 @@ sobe o emulador se necessário e instala/abre o app. Login seedado:
 ```
 core/
 ├── auth/
-│   └── TokenStore.kt         # singleton em memória (StateFlow<String?>)
+│   └── TokenStore.kt         # StateFlow<String?> de access + refresh, persistido em DataStore (auth.preferences_pb)
 └── network/
     ├── ApiClient.kt          # Retrofit + OkHttp + kotlinx-serialization
-    └── AuthInterceptor.kt    # injeta "Authorization: Bearer <key>"
+    ├── AuthInterceptor.kt    # injeta "Authorization: Bearer <access>"
+    └── TokenAuthenticator.kt # em 401, consome o refresh e troca o par; clears o store se falhar
 ```
 
 - **Retrofit 2.11** + **OkHttp 4.12** + **kotlinx-serialization 1.7** + converter da JakeWharton.
 - `Json { ignoreUnknownKeys = true; coerceInputValues = true }` — tolerante a campos novos
   no backend sem quebrar o app.
 - `HttpLoggingInterceptor` em `BODY` quando `BuildConfig.DEBUG` (visível via `adb logcat | grep OkHttp`).
-- `AuthInterceptor` lê o token do `TokenStore` e adiciona `Authorization: Bearer <key>`.
-  O backend (`apps/accounts/auth.BearerAuth`) é tolerante a prefixo: aceita `Bearer <key>`,
-  `Token <key>` ou só `<key>` — faz `header.split()[-1]` antes de buscar o token. Útil
-  para curl manual e para não quebrar se um cliente legado mandar outro prefixo.
+- `AuthInterceptor` lê o **access token** do `TokenStore` e adiciona `Authorization: Bearer <access>`.
+  O backend usa `ninja_jwt.authentication.JWTAuth`, que valida assinatura HS256 contra `SECRET_KEY`
+  e exige exatamente o esquema `Bearer <jwt>`.
+
+### Autenticação — JWT (access + refresh)
+
+- **Login / Register** retornam `{access, refresh, email}`.
+  - `access` (15 min) — JWT stateless. Validado por assinatura, sem hit no banco.
+  - `refresh` (7 dias) — JWT também assinado. Cada chamada a `/auth/refresh` rotaciona o par
+    e coloca o refresh anterior na blacklist (`ninja_jwt.token_blacklist`), então reutilizar
+    o mesmo refresh duas vezes resulta em 401.
+- **`TokenAuthenticator`** intercepta qualquer 401 do app: lê o refresh corrente, chama
+  `/auth/refresh` (em uma stack OkHttp dedicada para evitar recursão), grava o novo par
+  no `TokenStore` e re-emite a request original com o novo `Bearer`. Se o refresh falhar,
+  limpa o store — o app cai naturalmente para a tela de login.
+- **Logout** envia `POST /auth/logout` com o refresh; o backend o coloca na blacklist e o
+  `TokenStore` é zerado. `ProfileViewModel.logout` delega para `AuthRepository.logout()`.
 
 ### Token store
 
-`TokenStore` é um singleton **em memória** — perde o token ao matar o app.
-Próximo passo é migrar para `androidx.datastore:datastore-preferences` (eventualmente
-`EncryptedSharedPreferences` se o produto exigir).
+`TokenStore` mantém **dois** `StateFlow<String?>` (`accessToken`, `refreshToken`) e persiste
+ambos em `androidx.datastore:datastore-preferences` (chaves `access_token` / `refresh_token`,
+arquivo `auth`). A chave legada `token` (UUID v4 da versão anterior) é ignorada na leitura
+e removida em `clear()`. É instanciado em `EduApplication.onCreate()` e exposto como
+`EduApplication.tokenStore`. A leitura inicial é feita uma vez via
+`runBlocking { dataStore.data.first() }` para que o `AuthInterceptor` (síncrono) já encontre
+o access no primeiro request pós-startup; gravações subsequentes acontecem em uma corrotina IO,
+mantendo `setPair()` / `updateAccess()` / `clear()` não-suspend.
+
+Hardening futuro: migrar para `EncryptedSharedPreferences` se o produto exigir.
 
 ## Padrão por feature
 
@@ -167,7 +190,6 @@ Hoje:
 
 Quando a base de erros crescer:
 - Trocar `String?` por `sealed class AppError { Network, Validation, Auth, Server }`.
-- Adicionar **refresh interceptor** para `401` (re-autentica e re-tenta uma vez).
 - Snackbar para erros de operação; banner persistente para "sem rede".
 
 ## Mapeamento de campos sensíveis
@@ -238,8 +260,8 @@ exigir uso offline.
 
 - [ ] HTTPS obrigatório; remover `cleartextTrafficPermitted`.
 - [ ] `ALLOWED_HOSTS` específicos no Django; CORS restrito.
-- [ ] Token persistido em `EncryptedSharedPreferences` ou `DataStore` com criptografia.
-- [ ] Refresh token + interceptor de re-tentativa em `401`.
+- [x] Tokens (access + refresh) persistidos em `DataStore` (atualmente sem criptografia — passar para `EncryptedSharedPreferences` é hardening futuro).
+- [x] Refresh token + interceptor de re-tentativa em `401` (`TokenAuthenticator` + `/auth/refresh` com rotação e blacklist).
 - [ ] Não logar tokens, CPF, dados sensíveis — checar `HttpLoggingInterceptor` desligado em release.
 - [ ] Certificate pinning quando o produto justificar.
 
@@ -247,7 +269,5 @@ exigir uso offline.
 
 1. **Status de pedido no backend** — modelo atual de `Order` não tem `status`/etapa de entrega. Frontend trata todo pedido como entregue. Adicionar `status` (ex: `picking|transit|delivered`) + estimativa para reabilitar `ActiveOrderCard` com stepper.
 2. **Tela de métodos de pagamento dedicada** — hoje o atalho do Perfil cai no `CheckoutScreen`; criar rota própria com listagem e edição.
-3. **Persistência do token** — DataStore.
-4. **Refresh / 401 handling**.
-5. **Push (FCM)** — quando houver evento de status de pedido pelo backend.
-6. **Restringir review por compra** — endpoint atual aceita review de qualquer produto autenticado; ideal exigir que o usuário tenha um `OrderItem` daquele produto.
+3. **Push (FCM)** — quando houver evento de status de pedido pelo backend.
+4. **Restringir review por compra** — endpoint atual aceita review de qualquer produto autenticado; ideal exigir que o usuário tenha um `OrderItem` daquele produto.
