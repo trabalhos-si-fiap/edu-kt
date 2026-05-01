@@ -19,8 +19,13 @@ def user(db):
 
 
 @pytest.fixture
-def auth_headers(db, user):
-    from apps.accounts.models import Token
+def token_pair(db, user):
+    from ninja_jwt.tokens import RefreshToken
 
-    token = Token.objects.create(user=user)
-    return {"Authorization": f"Bearer {token.key}"}
+    refresh = RefreshToken.for_user(user)
+    return {"access": str(refresh.access_token), "refresh": str(refresh)}
+
+
+@pytest.fixture
+def auth_headers(token_pair):
+    return {"Authorization": f"Bearer {token_pair['access']}"}
