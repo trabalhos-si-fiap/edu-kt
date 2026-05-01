@@ -13,6 +13,7 @@ data class PaymentMethod(
     val cardBrand: String? = null,
     val cardholderName: String? = null,
     val cardExpiry: String? = null,
+    val cardholderTaxId: String? = null,
     val pixKey: String? = null,
 )
 
