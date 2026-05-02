@@ -64,6 +64,7 @@ import br.com.edu.core.ui.EduTextField
 import br.com.edu.core.ui.MainBottomBar
 import br.com.edu.features.support.domain.Sender
 import br.com.edu.features.support.domain.SupportMessage
+import br.com.edu.features.support.domain.formatMessageTime
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -242,7 +243,7 @@ private fun MessageList(
 @Composable
 private fun MessageBubble(message: SupportMessage) {
     val isUser = message.sender == Sender.USER
-    val time = formatTime(message.createdAt)
+    val time = formatMessageTime(message.createdAt)
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
@@ -386,9 +387,3 @@ private fun Disclaimer() {
     )
 }
 
-private fun formatTime(iso: String): String {
-    // ISO timestamp: "2026-04-30T14:20:00.000Z" — extract HH:mm
-    val tIndex = iso.indexOf('T')
-    if (tIndex < 0 || tIndex + 6 > iso.length) return ""
-    return iso.substring(tIndex + 1, tIndex + 6)
-}
