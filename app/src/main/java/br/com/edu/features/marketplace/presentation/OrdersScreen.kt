@@ -58,6 +58,7 @@ import br.com.edu.core.theme.EduColors
 import br.com.edu.core.theme.EduGradients
 import br.com.edu.core.ui.EduCard
 import br.com.edu.core.ui.EduSoftButton
+import br.com.edu.core.ui.formatBRL
 import br.com.edu.core.ui.MainBottomBar
 import br.com.edu.features.orders.domain.Order
 import br.com.edu.features.orders.domain.OrderItem
@@ -250,13 +251,6 @@ private fun OrdersList(
 
 private fun formatOrderId(id: Int): String = "#EDU-${id.toString().padStart(6, '0')}"
 
-private fun formatBrl(value: String): String {
-    val normalized = value.replace(',', '.')
-    val number = normalized.toBigDecimalOrNull() ?: return "R$ $value"
-    val parts = number.setScale(2, java.math.RoundingMode.HALF_UP).toPlainString().split('.')
-    return "R$ ${parts[0]},${parts[1]}"
-}
-
 private fun formatOrderDate(iso: String): String {
     val parsers = listOf(
         "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
@@ -327,7 +321,7 @@ private fun DeliveredOrderCard(
                     color = EduColors.TextPrimary,
                 )
                 Text(
-                    "Total: ${formatBrl(order.total)}",
+                    "Total: ${formatBRL(order.total)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = EduColors.TextSecondary,
                 )
@@ -446,7 +440,7 @@ private fun CarouselItemCard(item: OrderItem) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    formatBrl(item.unitPrice),
+                    formatBRL(item.unitPrice),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
                     color = EduColors.TextPrimary,
                 )
