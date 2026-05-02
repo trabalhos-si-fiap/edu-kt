@@ -16,6 +16,8 @@ Centralizador da documentação técnica do app. Para instalação e build, ver 
 | [Persistência local](persistence.md) | O que faz sentido salvar no dispositivo e como |
 | [Integração com back-end](backend-integration.md) | Fronteira device × servidor (Django + django-ninja) |
 | [Hot reload e dev workflow](dev-workflow.md) | Live Edit, Compose Preview, Makefile, testes unitários |
+| [Setup no macOS](macos-setup.md) | Apple Silicon e Intel: Homebrew, JDK, Android SDK, troubleshooting do emulador |
+| [Setup no Windows](windows-setup.md) | WSL2 (recomendado) e Windows nativo: pré-requisitos, variáveis, troubleshooting |
 | [Créditos](credits.md) | Equipe e ano |
 
 ## Convenções deste diretório

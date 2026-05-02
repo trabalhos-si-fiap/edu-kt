@@ -40,7 +40,15 @@ make configure-ip IP=192.168.x.x
 make run
 ```
 
-Detalhes manuais (sem Makefile) e Windows: [Quick start](#quick-start-clonou-agora) e [docs/windows-setup.md](docs/windows-setup.md).
+### Setup por sistema operacional
+
+| SO | Guia |
+|---|---|
+| **Linux** | comandos acima — fluxo nativo, sem passos extras |
+| **macOS** (Apple Silicon ou Intel) | [`docs/macos-setup.md`](docs/macos-setup.md) — Homebrew, JDK, SDK e troubleshooting do emulador |
+| **Windows 10/11** | [`docs/windows-setup.md`](docs/windows-setup.md) — caminho recomendado via WSL2 + alternativa nativa |
+
+Detalhes manuais (sem Makefile): [Quick start](#quick-start-clonou-agora).
 
 ## Telas implementadas
 
@@ -100,7 +108,8 @@ edu-kt/
                             CheckoutScreen, OrdersScreen}.kt
 ```
 
-> **Usando Windows 10/11?** Veja o guia dedicado em [`docs/windows-setup.md`](docs/windows-setup.md) — os comandos abaixo assumem Linux/macOS.
+> **Em Windows 10/11 ou macOS?** Os comandos abaixo assumem Linux. Veja os guias dedicados:
+> [`docs/macos-setup.md`](docs/macos-setup.md) (Apple Silicon e Intel) · [`docs/windows-setup.md`](docs/windows-setup.md) (WSL2 ou nativo).
 
 ## Pré-requisitos
 
