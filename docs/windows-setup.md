@@ -156,7 +156,7 @@ Instale, na ordem abaixo. Reinicie a máquina ao final.
 | # | Ferramenta | Versão | Onde baixar / como instalar |
 |---|---|---|---|
 | 1 | **Git for Windows** | mais recente | <https://git-scm.com/download/win> — aceite os defaults; isso instala também o `Git Bash` |
-| 2 | **JDK 21 (Temurin)** | 21 LTS | <https://adoptium.net/temurin/releases/?version=21> — escolha o instalador `.msi` x64 e marque **"Set JAVA_HOME"** e **"Add to PATH"** |
+| 2 | **OpenJDK 21** | 21 LTS | <https://jdk.java.net/21/> (build oficial da Oracle/OpenJDK) — baixe o `.zip` x64, extraia em `C:\Program Files\Java\jdk-21` e configure `JAVA_HOME` e `PATH` manualmente (ver passo 2) |
 | 3 | **Android Studio** | Hedgehog (2023.1) ou superior | <https://developer.android.com/studio> — durante o setup, deixe marcadas as opções **Android SDK**, **Android SDK Platform 35**, **Android Virtual Device** |
 | 4 | **Docker Desktop** | mais recente | <https://www.docker.com/products/docker-desktop/> — exige Windows 10 22H2+ ou Windows 11 |
 | 5 | **Python 3.10+** | 3.10 ou superior | <https://www.python.org/downloads/windows/> — marque **"Add python.exe to PATH"** no instalador |
@@ -171,7 +171,7 @@ Em **Variáveis de usuário**, garanta:
 
 | Variável | Valor de exemplo |
 |---|---|
-| `JAVA_HOME` | `C:\Program Files\Eclipse Adoptium\jdk-21.0.5.11-hotspot` |
+| `JAVA_HOME` | `C:\Program Files\Java\jdk-21` |
 | `ANDROID_HOME` | `C:\Users\<seu-usuario>\AppData\Local\Android\Sdk` |
 
 Edite o `Path` (na mesma janela) e adicione:
@@ -264,9 +264,9 @@ adb logcat | findstr br.com.edu
 | Sintoma | Causa / Solução |
 |---|---|
 | `gradlew : The term 'gradlew' is not recognized` | Use `.\gradlew.bat` no PowerShell (o ponto-barra é obrigatório). |
-| `JAVA_HOME is set to an invalid directory` | Confira o caminho exato em `C:\Program Files\Eclipse Adoptium\` — versões diferem. |
+| `JAVA_HOME is set to an invalid directory` | Confira o caminho exato em `C:\Program Files\Java\` — versões diferem. |
 | `SDK location not found` | Crie `local.properties` na raiz com `sdk.dir=C\:\\Users\\<usuario>\\AppData\\Local\\Android\\Sdk` (barras duplas e `\:`). |
-| `Unsupported class file major version` | JDK menor que 17. Reinstale o Temurin 21 e refaça as variáveis de ambiente. |
+| `Unsupported class file major version` | JDK menor que 17. Reinstale o OpenJDK 21 e refaça as variáveis de ambiente. |
 | `CLEARTEXT communication not permitted` | Rode `python scripts\configure_ip.py` novamente — o IP mudou. |
 | `docker compose` retorna `error during connect` | Docker Desktop não está rodando. |
 | Emulador não aparece em `adb devices` | `adb kill-server` seguido de `adb start-server`. |

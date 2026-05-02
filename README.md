@@ -106,7 +106,7 @@ edu-kt/
 
 | Ferramenta | Versão | Como obter |
 |---|---|---|
-| JDK | 17 ou 21 (LTS) | Temurin via `asdf install java temurin-21.0.9+10.0.LTS` |
+| JDK | 17 ou 21 (LTS) | OpenJDK 21 via `asdf install java openjdk-21.0.2` (ou pacote da distro) |
 | Android SDK | Platform 35 + Build-Tools 34 | Android Studio ou `cmdline-tools` |
 | Docker + Compose | qualquer versão recente | docker.com / pacote da distro |
 | Python | 3.10+ (só para o `configure_ip.py`) | já vem na maioria das distros |
@@ -115,7 +115,7 @@ edu-kt/
 Variáveis de ambiente esperadas:
 
 ```bash
-export JAVA_HOME=$HOME/.asdf/installs/java/temurin-21.0.9+10.0.LTS
+export JAVA_HOME=$HOME/.asdf/installs/java/openjdk-21.0.2
 export ANDROID_HOME=$HOME/Android/Sdk
 export PATH=$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH
 ```
@@ -178,7 +178,7 @@ make clean           # limpa artefatos
 
 Detalhes de testes (filtros, relatórios, escopo) em [docs/dev-workflow.md](docs/dev-workflow.md#testes-unitários).
 
-`make` exporta `JAVA_HOME` (Temurin 21 do asdf) e `ANDROID_HOME` (`~/Android/Sdk`) automaticamente — sobrescreva passando `JAVA_HOME=... make run` se precisar.
+`make` exporta `JAVA_HOME` (OpenJDK 21 do asdf) e `ANDROID_HOME` (`~/Android/Sdk`) automaticamente — sobrescreva passando `JAVA_HOME=... make run` se precisar.
 
 ## Como subir o app (sem Makefile)
 

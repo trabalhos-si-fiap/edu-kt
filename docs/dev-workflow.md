@@ -18,7 +18,7 @@ Atalhos e ferramentas para iterar rápido. Setup e build cru estão no [README p
 | `make stop` | force-stop |
 | `make clean` | Limpa artefatos |
 
-`JAVA_HOME` e `ANDROID_HOME` são exportados pelo próprio Makefile (Temurin 21 via asdf, `~/Android/Sdk`). Sobrescreva passando na linha de comando: `JAVA_HOME=/outro/jdk make run`.
+`JAVA_HOME` e `ANDROID_HOME` são exportados pelo próprio Makefile (OpenJDK 21 via asdf, `~/Android/Sdk`). Sobrescreva passando na linha de comando: `JAVA_HOME=/outro/jdk make run`.
 
 ## Hot reload e iteração rápida
 
