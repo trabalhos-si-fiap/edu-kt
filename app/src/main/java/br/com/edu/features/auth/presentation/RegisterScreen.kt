@@ -57,11 +57,9 @@ import br.com.edu.core.ui.AuthBottomBar
 import br.com.edu.core.ui.EduCard
 import br.com.edu.core.ui.EduPrimaryButton
 import br.com.edu.core.ui.EduTextField
+import br.com.edu.features.auth.domain.epochMillisUtcToIsoDate
+import br.com.edu.features.auth.domain.isoDateToDisplay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,7 +169,7 @@ fun RegisterScreen(
                     LabeledField("Data de nascimento") {
                         Box(Modifier.fillMaxWidth()) {
                             EduTextField(
-                                value = birthDate,
+                                value = isoDateToDisplay(birthDate),
                                 onValueChange = { },
                                 placeholder = "DD/MM/AAAA",
                                 readOnly = true,
@@ -275,9 +273,7 @@ fun RegisterScreen(
                 TextButton(onClick = {
                     val millis = datePickerState.selectedDateMillis
                     if (millis != null) {
-                        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale("pt", "BR"))
-                        sdf.timeZone = TimeZone.getTimeZone("UTC")
-                        birthDate = sdf.format(Date(millis))
+                        birthDate = epochMillisUtcToIsoDate(millis)
                     }
                     datePickerOpen = false
                 }) { Text("OK") }
